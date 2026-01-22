@@ -1,0 +1,135 @@
+"use client";
+
+import { useState } from "react";
+import { supabase } from "@/lib/supabase/supabase";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+// Reusing the type (in a real app, import this from types/supabase.ts)
+type Story = {
+  id: number;
+  external_id: string;
+  title_en: string;
+  title_he: string;
+  body_en: string;
+  body_he: string;
+};
+
+interface EditStoryModalProps {
+  story: Story | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: () => void; // Trigger refresh after save
+}
+
+export default function EditStoryModal({ story, isOpen, onClose, onSaved }: EditStoryModalProps) {
+  const [loading, setLoading] = useState(false);
+  
+  // Local state for form fields
+  // We use "defaultValue" or controlled state. Controlled is safer here.
+  const [formData, setFormData] = useState({
+    title_en: story?.title_en || "",
+    title_he: story?.title_he || "",
+    body_en: story?.body_en || "",
+    body_he: story?.body_he || "",
+  });
+
+  // Update local state when typing
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!story) return;
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("stories")
+      .update({
+        title_en: formData.title_en,
+        title_he: formData.title_he,
+        body_en: formData.body_en,
+        body_he: formData.body_he,
+      })
+      .eq("id", story.id);
+
+    setLoading(false);
+
+    if (error) {
+      alert("Error saving: " + error.message);
+    } else {
+      onSaved(); // Refresh the parent list
+      onClose(); // Close modal
+    }
+  };
+
+  if (!story) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Story: {story.external_id}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-6 py-4">
+          {/* English Column */}
+          <div className="space-y-4">
+            <h3 className="font-bold border-b pb-2">English</h3>
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input 
+                value={formData.title_en} 
+                onChange={(e) => handleChange("title_en", e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Body</Label>
+              <Textarea 
+                className="min-h-[300px]" 
+                value={formData.body_en} 
+                onChange={(e) => handleChange("body_en", e.target.value)} 
+              />
+            </div>
+          </div>
+
+          {/* Hebrew Column */}
+          <div className="space-y-4" dir="rtl">
+            <h3 className="font-bold border-b pb-2">עברית (Hebrew)</h3>
+            <div className="space-y-2">
+              <Label>כותרת (Title)</Label>
+              <Input 
+                value={formData.title_he} 
+                onChange={(e) => handleChange("title_he", e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>תוכן (Body)</Label>
+              <Textarea 
+                className="min-h-[300px]" 
+                value={formData.body_he} 
+                onChange={(e) => handleChange("body_he", e.target.value)} 
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={loading}>
+            {loading ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
