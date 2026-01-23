@@ -40,10 +40,16 @@ export default function StoryTable({ initialStories }: StoryTableProps) {
               <TableCell>
                 {story.hebrew_day} {story.hebrew_month}
               </TableCell>
-              <TableCell className="max-w-[200px] truncate" title={story.title_en || ""}>
+              <TableCell
+                className="max-w-[200px] truncate"
+                title={story.title_en || ""}
+              >
                 {story.title_en || "Untitled"}
               </TableCell>
-              <TableCell className="text-right max-w-[200px] truncate" title={story.title_he || ""}>
+              <TableCell
+                className="max-w-[200px] truncate text-right"
+                title={story.title_he || ""}
+              >
                 {story.title_he || "---"}
               </TableCell>
               <TableCell>

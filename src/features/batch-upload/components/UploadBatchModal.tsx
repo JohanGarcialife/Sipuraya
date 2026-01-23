@@ -19,7 +19,11 @@ interface UploadBatchModalProps {
   onSuccess: () => void;
 }
 
-export default function UploadBatchModal({ isOpen, onClose, onSuccess }: UploadBatchModalProps) {
+export default function UploadBatchModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: UploadBatchModalProps) {
   const [fileEn, setFileEn] = useState<File | null>(null);
   const [fileHe, setFileHe] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,17 +47,17 @@ export default function UploadBatchModal({ isOpen, onClose, onSuccess }: UploadB
         method: "POST",
         body: formData,
       });
-      
+
       const data = await res.json();
-      
+
       if (res.ok) {
         setStatus(`✅ Success! ${data.message}`);
         setTimeout(() => {
-            onSuccess(); // Refresh parent
-            onClose();
-            setStatus("");
-            setFileEn(null);
-            setFileHe(null);
+          onSuccess(); // Refresh parent
+          onClose();
+          setStatus("");
+          setFileEn(null);
+          setFileHe(null);
         }, 2000);
       } else {
         setStatus(`❌ Error: ${data.error}`);
@@ -71,35 +75,38 @@ export default function UploadBatchModal({ isOpen, onClose, onSuccess }: UploadB
         <DialogHeader>
           <DialogTitle>Batch Upload (The Zipper)</DialogTitle>
           <DialogDescription>
-            Upload the English and Hebrew files (.docx or .pdf). The system will merge them automatically.
+            Upload the English and Hebrew files (.docx or .pdf). The system will
+            merge them automatically.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="file-en">English File</Label>
-            <Input 
-                id="file-en" 
-                type="file" 
-                accept=".docx,.pdf"
-                onChange={(e) => setFileEn(e.target.files?.[0] || null)} 
+            <Input
+              id="file-en"
+              type="file"
+              accept=".docx,.pdf"
+              onChange={(e) => setFileEn(e.target.files?.[0] || null)}
             />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="file-he">Hebrew File</Label>
-            <Input 
-                id="file-he" 
-                type="file" 
-                accept=".docx,.pdf"
-                onChange={(e) => setFileHe(e.target.files?.[0] || null)} 
+            <Input
+              id="file-he"
+              type="file"
+              accept=".docx,.pdf"
+              onChange={(e) => setFileHe(e.target.files?.[0] || null)}
             />
           </div>
         </div>
 
         {status && (
-            <div className={`text-sm text-center p-2 rounded ${status.includes("Error") ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}>
-                {status}
-            </div>
+          <div
+            className={`rounded p-2 text-center text-sm ${status.includes("Error") ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}
+          >
+            {status}
+          </div>
         )}
 
         <div className="flex justify-end gap-3">

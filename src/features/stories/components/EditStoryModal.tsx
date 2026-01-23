@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "@/lib/supabase/supabase";
+import { useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
 import {
   Dialog,
   DialogContent,
@@ -13,16 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-// Reusing the type (in a real app, import this from types/supabase.ts)
-type Story = {
-  id: number;
-  external_id: string;
-  title_en: string;
-  title_he: string;
-  body_en: string;
-  body_he: string;
-};
+import { Story } from "../types";
+import { toast } from "sonner";
 
 interface EditStoryModalProps {
   story: Story | null;
@@ -31,11 +23,14 @@ interface EditStoryModalProps {
   onSaved: () => void; // Trigger refresh after save
 }
 
-export default function EditStoryModal({ story, isOpen, onClose, onSaved }: EditStoryModalProps) {
+export default function EditStoryModal({
+  story,
+  isOpen,
+  onClose,
+  onSaved,
+}: EditStoryModalProps) {
+  const supabase = createSupabaseBrowserClient();
   const [loading, setLoading] = useState(false);
-  
-  // Local state for form fields
-  // We use "defaultValue" or controlled state. Controlled is safer here.
   const [formData, setFormData] = useState({
     title_en: story?.title_en || "",
     title_he: story?.title_he || "",
@@ -43,7 +38,20 @@ export default function EditStoryModal({ story, isOpen, onClose, onSaved }: Edit
     body_he: story?.body_he || "",
   });
 
-  // Update local state when typing
+  // When the story prop (specifically the ID) changes, update the form data
+  useEffect(() => {
+    // Only update if the story is actually provided and its ID changes,
+    // or if the modal is opened with a new story
+    if (story && (formData.title_en !== story.title_en || formData.title_he !== story.title_he)) {
+      setFormData({
+        title_en: story.title_en || "",
+        title_he: story.title_he || "",
+        body_en: story.body_en || "",
+        body_he: story.body_he || "",
+      });
+    }
+  }, [story?.id]); // Depend on story.id to re-initialize for different stories
+
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -65,10 +73,13 @@ export default function EditStoryModal({ story, isOpen, onClose, onSaved }: Edit
     setLoading(false);
 
     if (error) {
-      alert("Error saving: " + error.message);
+      toast.error("Error saving story", {
+        description: error.message,
+      });
     } else {
-      onSaved(); // Refresh the parent list
-      onClose(); // Close modal
+      toast.success("Story saved successfully!");
+      onSaved();
+      onClose();
     }
   };
 
@@ -76,7 +87,7 @@ export default function EditStoryModal({ story, isOpen, onClose, onSaved }: Edit
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Story: {story.external_id}</DialogTitle>
         </DialogHeader>
@@ -84,47 +95,49 @@ export default function EditStoryModal({ story, isOpen, onClose, onSaved }: Edit
         <div className="grid grid-cols-2 gap-6 py-4">
           {/* English Column */}
           <div className="space-y-4">
-            <h3 className="font-bold border-b pb-2">English</h3>
+            <h3 className="border-b pb-2 font-bold">English</h3>
             <div className="space-y-2">
               <Label>Title</Label>
-              <Input 
-                value={formData.title_en} 
-                onChange={(e) => handleChange("title_en", e.target.value)} 
+              <Input
+                value={formData.title_en}
+                onChange={(e) => handleChange("title_en", e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label>Body</Label>
-              <Textarea 
-                className="min-h-[300px]" 
-                value={formData.body_en} 
-                onChange={(e) => handleChange("body_en", e.target.value)} 
+              <Textarea
+                className="min-h-[300px]"
+                value={formData.body_en}
+                onChange={(e) => handleChange("body_en", e.target.value)}
               />
             </div>
           </div>
 
           {/* Hebrew Column */}
           <div className="space-y-4" dir="rtl">
-            <h3 className="font-bold border-b pb-2">עברית (Hebrew)</h3>
+            <h3 className="border-b pb-2 font-bold">עברית (Hebrew)</h3>
             <div className="space-y-2">
               <Label>כותרת (Title)</Label>
-              <Input 
-                value={formData.title_he} 
-                onChange={(e) => handleChange("title_he", e.target.value)} 
+              <Input
+                value={formData.title_he}
+                onChange={(e) => handleChange("title_he", e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label>תוכן (Body)</Label>
-              <Textarea 
-                className="min-h-[300px]" 
-                value={formData.body_he} 
-                onChange={(e) => handleChange("body_he", e.target.value)} 
+              <Textarea
+                className="min-h-[300px]"
+                value={formData.body_he}
+                onChange={(e) => handleChange("body_he", e.target.value)}
               />
             </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button onClick={handleSave} disabled={loading}>
             {loading ? "Saving..." : "Save Changes"}
           </Button>

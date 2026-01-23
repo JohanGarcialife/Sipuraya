@@ -1,0 +1,11 @@
+# Directories
+.next/
+.turbo/
+node_modules/
+dist/
+
+# Config files
+next.config.ts
+
+# Data files
+*.json
