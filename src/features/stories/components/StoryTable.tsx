@@ -1,7 +1,7 @@
 // ...existing code...
 "use client";
 
-import { Story } from "../../../lib/types/supabase";
+import { Story } from "../../types";
 import {
   Table,
   TableBody,
