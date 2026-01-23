@@ -53,8 +53,8 @@ export default function StoryTable({ initialStories }: StoryTableProps) {
                 {story.title_he || "---"}
               </TableCell>
               <TableCell>
-                <Button variant="ghost" size="icon">
-                  <Pencil className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="cursor-pointer">
+                  <Pencil className="h-4 w-4 cursor-pointer" />
                 </Button>
               </TableCell>
             </TableRow>

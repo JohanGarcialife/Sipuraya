@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Plus, LogOut, Search } from "lucide-react";
+import { Pencil, Plus, LogOut, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
 
 const EditStoryModal = dynamic(
@@ -40,6 +40,10 @@ export default function AdminDashboard() {
   // State for Search
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
   const router = useRouter();
 
   // Filter stories based on search term
@@ -58,7 +62,17 @@ export default function AdminDashboard() {
     });
   }, [stories, searchTerm]);
 
+  // Reset to first page when search term or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, pageSize, filteredStories.length]);
 
+  // Pagination calculations
+  const totalStories = filteredStories.length;
+  const totalPages = Math.max(1, Math.ceil(totalStories / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalStories);
+  const paginatedStories = filteredStories.slice(startIndex, endIndex);
 
   // Handle Logout
   const handleLogout = async () => {
@@ -83,8 +97,11 @@ export default function AdminDashboard() {
     queryClient.invalidateQueries({ queryKey: ["stories"] });
   };
 
-
-// ... inside AdminDashboard component
+  const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1));
+  const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPageSize(Number(e.target.value));
+  };
 
   if (isLoading) {
     return (
@@ -161,12 +178,12 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleLogout}>
+          <Button variant="outline" onClick={handleLogout} className="cursor-pointer">
             <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
-          <Button onClick={() => setIsUploadOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={() => setIsUploadOpen(true)} className="cursor-pointer">
+            <Plus className="mr-2 h-4 w-4 rounded-2xl " />
             Upload Batch
           </Button>
         </div>
@@ -200,7 +217,7 @@ export default function AdminDashboard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredStories.map((story) => (
+            {paginatedStories.map((story) => (
               <TableRow key={story.id} className="hover:bg-gray-50/50">
                 {/* ID */}
                 <TableCell className="font-mono text-xs font-medium text-gray-500">
@@ -256,9 +273,50 @@ export default function AdminDashboard() {
           </TableBody>
         </Table>
 
-        {/* Footer info */}
-        <div className="border-t p-4 text-center text-xs text-gray-500">
-          Showing {filteredStories.length} of {stories?.length || 0} stories.
+        {/* Footer info with pagination controls */}
+       <div className="flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-gray-500">
+            Showing {startIndex + 1}-{endIndex} of {stories?.length || 0} stories.
+            {" "}Page {currentPage} of {totalPages}.
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500">Show:</label>
+            <select
+              value={pageSize}
+              onChange={handlePageSizeChange}
+              className="rounded border px-2 py-1 text-sm"
+            >
+              <option value={10}>10</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goPrev}
+              disabled={currentPage === 1}
+              className="h-8 w-8 p-0"
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="text-sm text-gray-600 px-2">
+              {currentPage}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goNext}
+              disabled={currentPage === totalPages}
+              className="h-8 w-8 p-0"
+              aria-label="Next page"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
