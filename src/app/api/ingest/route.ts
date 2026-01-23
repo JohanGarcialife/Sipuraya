@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
 
     // Map English Base
     const storiesMap = new Map();
-    rawStoriesEn.forEach((block) => {
+    rawStoriesEn.forEach((block: string) => {
       const data = parseStoryBlock(block);
       if (data.id) {
         storiesMap.set(data.id, {
@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
 
     // Merge Hebrew
     let matchCount = 0;
-    rawStoriesHe.forEach((block) => {
+    rawStoriesHe.forEach((block: string) => {
       const data = parseStoryBlock(block);
       if (data.id && storiesMap.has(data.id)) {
         const existing = storiesMap.get(data.id);
