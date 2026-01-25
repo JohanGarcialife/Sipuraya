@@ -1,0 +1,313 @@
+const path = require('path');
+// Cargar variables de entorno desde la raíz del proyecto Next.js
+require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
+// Fallback: si no existe .env.local, intenta .env
+if (!process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+}
+
+const fs = require('fs');
+const mammoth = require('mammoth');
+const pdf = require('pdf-parse');
+const OpenAI = require('openai');
+
+// --- CONFIG ---
+const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+const DATA_DIR = path.join(__dirname, 'data'); 
+const OUTPUT_JSON = path.join(__dirname, 'ready_to_upload.json');
+
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY }); 
+
+const MONTH_MAP = {
+  'nisan': 1, 'iyar': 2, 'sivan': 3, 'tamuz': 4, 'av': 5, 'elul': 6,
+  'tishrei': 7, 'cheshvan': 8, 'kislev': 9, 'tevet': 10, 'shevat': 11,
+  'adar': 12, 'adar i': 12, 'adar ii': 13, 'adar 1': 12, 'adar 2': 13
+};
+
+// --- HELPERS ---
+function cleanId(id) {
+  if (!id) return null;
+  return id.replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function smartFindId(line) {
+    let match = line.match(/(Ad\d+)/i);
+    if (match) return match[1];
+    match = line.match(/(\d+Ad)/i); // RTL Inverted check
+    if (match) {
+        const numbers = match[1].replace(/Ad/i, '');
+        return `Ad${numbers}`;
+    }
+    return null;
+}
+
+// --- FILE READING ---
+function findDataFiles() {
+  const args = process.argv.slice(2);
+  if (args.length >= 2) {
+    return { pathEn: path.join(DATA_DIR, args[0]), pathHe: path.join(DATA_DIR, args[1]) };
+  }
+  return null; 
+}
+
+async function getFileContent(filePath) {
+  if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      return null;
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  
+  try {
+    if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ path: filePath });
+      return result.value;
+    } else if (ext === '.pdf') {
+      const dataBuffer = fs.readFileSync(filePath);
+      const data = await pdf(dataBuffer);
+      return data.text.replace(/\n\n+/g, '\n'); 
+    } else {
+      return fs.readFileSync(filePath, 'utf-8');
+    }
+  } catch (err) {
+    console.error(`❌ Error reading file: ${err.message}`);
+    return null;
+  }
+}
+
+// --- PARSING LOGIC FOR ENGLISH BLOCKS ---
+function parseStoryBlock(block) {
+  const lines = block.replace(/\r\n/g, '\n').split('\n');
+  const storyData = {};
+  let bodyBuffer = [];
+
+  // Strict Regex for Metadata Only
+  const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
+  const regexTitleEn = /###English Title:|English Title:|Title:/i;
+  const regexTitleHe = /###KOTERET:|###Hebrew Title:|KOTERET:|Hebrew Title:/i;
+  
+  // Simplified: Only ignore these EXACT patterns (using regex for precise matching)
+  const IGNORE_PATTERNS = [
+      /^###English Translation/i,
+      /^###Hebrew Translation/i,
+      /^Start of OCR/i,
+      /^End of OCR/i,
+      /^Screenshot for page/i
+  ];
+
+  lines.forEach(line => {
+    let cleanLine = line.trim();
+    if (!cleanLine) return;
+
+    // 1. ID Detection
+    if (cleanLine.includes('Ad') || cleanLine.includes('Story ID')) {
+        const foundId = smartFindId(cleanLine);
+        if (foundId) {
+            storyData.id = cleanId(foundId);
+            return; 
+        }
+    }
+
+    // 2. Metadata Tags
+    if (cleanLine.includes('###') || regexDate.test(cleanLine)) {
+        
+        // Date Fix ("1 of Adar")
+        if (regexDate.test(cleanLine)) {
+            const rawDate = cleanLine.replace(/###|Date:|תאריך:/gi, '').trim(); 
+            
+            // Day
+            const dayMatch = rawDate.match(/(\d+)/);
+            if (dayMatch) storyData.day = parseInt(dayMatch[1]);
+
+            // Month
+            const lowerDate = rawDate.toLowerCase();
+            for (const [monthName, index] of Object.entries(MONTH_MAP)) {
+                if (lowerDate.includes(monthName)) {
+                    storyData.month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                    storyData.monthIndex = index;
+                    break; 
+                }
+            }
+            // Fallback for month if map fails
+            if (!storyData.month) {
+                 const parts = rawDate.split(' ');
+                 // Fix: Handle "1 of Adar" format - take the word AFTER "of"
+                 if (parts.length > 2 && parts[1].toLowerCase() === 'of') {
+                     storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
+                 } else if (parts.length > 1 && parts[1].toLowerCase() !== 'of') {
+                     storyData.month = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+                 } else if (parts.length > 2) {
+                     storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
+                 }
+            }
+            return;
+        }
+
+        if (regexTitleEn.test(cleanLine)) {
+            storyData.title_en = cleanLine.replace(regexTitleEn, '').replace(/###/g, '').trim();
+            return;
+        }
+        if (regexTitleHe.test(cleanLine)) {
+            storyData.title_he = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
+            return;
+        }
+        return; 
+    } 
+    
+    // 3. Body Content (Greedy - Everything else is body)
+    // Skip only explicit ignore patterns, everything else goes to body
+    if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;
+    
+    // Skip ONLY standalone page numbers (single digits or simple numbers on their own line)
+    // But allow numbers that are part of text (like "10 people" or "Ad123")
+    if (/^\d+$/.test(cleanLine) && cleanLine.length <= 3) return;
+
+    bodyBuffer.push(cleanLine);
+  });
+
+  storyData.body = bodyBuffer.join('\n').trim();
+  return storyData;
+}
+
+// --- SPECIAL PARSER FOR HEBREW BLOCKS (Different Format) ---
+// Hebrew files don't have structured metadata like English files
+// Format: #סיפור_מספר: Ad0069
+// Followed by ALL content until next delimiter
+function parseHebrewBlock(block) {
+  const lines = block.replace(/\r\n/g, '\n').split('\n');
+  const storyData = {};
+  let bodyStarted = false;
+  let bodyBuffer = [];
+  
+  for (const line of lines) {
+    const cleanLine = line.trim();
+    if (!cleanLine) continue;
+    
+    // 1. Check for Hebrew ID tag: #סיפור_מספר: Ad0069
+    if (cleanLine.includes('#סיפור_מספר:') || cleanLine.includes('סיפור_מספר')) {
+      const foundId = smartFindId(cleanLine);
+      if (foundId) {
+        storyData.id = cleanId(foundId);
+        bodyStarted = true;
+        continue; // Don't include ID line in body
+      }
+    }
+    
+    // 2. Skip common separator lines
+    if (cleanLine === '###NEW STORY') continue;
+    if (cleanLine.startsWith('###רבי')) continue;  // Rabbi name header
+    if (cleanLine.startsWith('###א\'')) continue;   // Date header like "א' אדר"
+    if (cleanLine.startsWith('###ב\'')) continue;   // Date header like "ב' אדר"
+    if (cleanLine.startsWith('###ג\'')) continue;   // Date header etc.
+    
+    // 3. Capture everything else as body after ID found
+    if (bodyStarted) {
+      // Skip only standalone single-digit page numbers
+      if (/^\d$/.test(cleanLine)) continue;
+      bodyBuffer.push(cleanLine);
+    }
+  }
+  
+  storyData.body = bodyBuffer.join('\n').trim();
+  return storyData;
+}
+
+// --- AI EMBEDDING (Safe) ---
+async function generateEmbedding(text) {
+  if (!OPENAI_API_KEY || !text || text.length < 5) return null;
+  try {
+    const cleanText = text.replace(/\s+/g, ' ').slice(0, 4000); 
+    const response = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: cleanText,
+      dimensions: 1536
+    });
+    return response.data[0].embedding;
+  } catch (e) {
+    console.warn(`⚠️ AI Warning: ${e.message}`);
+    return null; 
+  }
+}
+
+// --- MAIN ---
+async function main() {
+  const files = findDataFiles();
+  if (!files) return;
+
+  const textEn = await getFileContent(files.pathEn);
+  const textHe = await getFileContent(files.pathHe);
+
+  if (!textEn || !textHe) return;
+
+  const splitRegex = /###\s*NEW\s*STORY/i;
+  const rawStoriesEn = textEn.split(splitRegex);
+  const rawStoriesHe = textHe.split(splitRegex);
+
+  console.log(`📊 Processing: EN (${rawStoriesEn.length}) | HE (${rawStoriesHe.length})`);
+
+  const storiesMap = new Map();
+
+  // Process English
+  rawStoriesEn.forEach(block => {
+    const data = parseStoryBlock(block);
+    if (data.id) {
+      storiesMap.set(data.id, {
+        external_id: data.id,
+        hebrew_day: data.day || 1,
+        hebrew_month: data.month || 'Adar',
+        hebrew_month_index: data.monthIndex || 12,
+        title_en: data.title_en,
+        body_en: data.body, 
+        title_he: data.title_he || null, 
+        body_he: null
+      });
+    }
+  });
+
+  // Process Hebrew (Merge) - USE SPECIAL HEBREW PARSER
+  rawStoriesHe.forEach(block => {
+    // Hebrew files have different format: #סיפור_מספר: AdXXX followed by ALL content
+    // No structured metadata tags - we need special parsing
+    const data = parseHebrewBlock(block);
+    
+    if (data.id && storiesMap.has(data.id)) {
+      const existing = storiesMap.get(data.id);
+      // Hebrew body is everything after the ID tag
+      if (data.body && data.body.length > 10) {
+        existing.body_he = data.body;
+      }
+    }
+  });
+
+  const finalArray = Array.from(storiesMap.values());
+  
+  // Generate Embeddings & Append to JSON File
+  let processedData = [];
+  for (let i = 0; i < finalArray.length; i++) {
+      const story = finalArray[i];
+      const textForAI = story.body_he || story.body_en;
+      const embedding = await generateEmbedding(textForAI);
+      
+      processedData.push({
+          ...story,
+          embedding,
+          is_published: true
+      });
+      
+      if (i % 10 === 0) process.stdout.write('.');
+  }
+
+  // Save to JSON (Append mode logic)
+  let existingData = [];
+  if (fs.existsSync(OUTPUT_JSON)) {
+      try {
+        existingData = JSON.parse(fs.readFileSync(OUTPUT_JSON));
+      } catch(e) {}
+  }
+  
+  const allData = [...existingData, ...processedData];
+  fs.writeFileSync(OUTPUT_JSON, JSON.stringify(allData, null, 2));
+
+  console.log(`\n✅ Saved ${processedData.length} stories to JSON.`);
+}
+
+main();
