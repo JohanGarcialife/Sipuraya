@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
+import { useEffect, useState, useCallback } from "react";
+import { createSupabaseBrowserClient } from "../../lib/supabase/supabase";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -14,324 +13,226 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Plus, LogOut, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import dynamic from "next/dynamic";
+import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown } from "lucide-react";
+import EditStoryModal from "../../features/stories/components/EditStoryModal";
+import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal"; 
 
-const EditStoryModal = dynamic(
-  () => import("@/features/stories/components/EditStoryModal")
-);
-const UploadBatchModal = dynamic(
-  () => import("@/features/batch-upload/components/UploadBatchModal")
-);
-import { Story } from "@/features/stories/types";
-import { useStories } from "@/features/stories/hooks/useStories";
-import { Skeleton } from "@/components/ui/skeleton";
+// TYPES
+export type Story = {
+  id: number;
+  external_id: string;
+  hebrew_month: string;
+  hebrew_day: number;
+  title_en: string;
+  title_he: string;
+  body_en: string;
+  body_he: string;
+};
+
+const PAGE_SIZE = 50;
 
 export default function AdminDashboard() {
-  const supabase = createSupabaseBrowserClient();
-  const queryClient = useQueryClient();
-  const { data: stories, isLoading, isError } = useStories();
-
-  // State for Modals
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // State for Search
-  const [searchTerm, setSearchTerm] = useState("");
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(10);
-
   const router = useRouter();
 
-  // Filter stories based on search term
-  const filteredStories = useMemo(() => {
-    if (!stories) return [];
-    const lowercasedTerm = searchTerm.toLowerCase();
-    return stories.filter((story) => {
-      const titleEn = story.title_en?.toLowerCase() || "";
-      const titleHe = story.title_he?.toLowerCase() || "";
-      const externalId = story.external_id?.toLowerCase() || "";
-      return (
-        titleEn.includes(lowercasedTerm) ||
-        titleHe.includes(lowercasedTerm) ||
-        externalId.includes(lowercasedTerm)
-      );
-    });
-  }, [stories, searchTerm]);
+  // STATE
+  const supabase = createSupabaseBrowserClient();
+  const [stories, setStories] = useState<Story[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Pagination, Search, Sort
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Sorting State
+  const [sortCol, setSortCol] = useState<string>("id");
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  
+  // Modals
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  // Reset to first page when search term or page size changes
+  // CHECK AUTH
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, pageSize, filteredStories.length]);
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) router.push("/login");
+    };
+    checkUser();
+  }, [router]);
 
-  // Pagination calculations
-  const totalStories = filteredStories.length;
-  const totalPages = Math.max(1, Math.ceil(totalStories / pageSize));
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalStories);
-  const paginatedStories = filteredStories.slice(startIndex, endIndex);
+  // FETCH DATA
+  const fetchStories = useCallback(async () => {
+    setLoading(true);
+    try {
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
-  // Handle Logout
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+      let query = supabase
+        .from("stories")
+        .select("*", { count: 'exact' });
+
+      // FIX: Scope Search (Body included)
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim();
+        // Syntax for searching multiple columns in Supabase
+        query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,external_id.ilike.%${term}%`);
+      }
+
+      // FIX: Dynamic Sorting
+      // If sorting by date, we actually sort by the index columns
+      if (sortCol === 'date') {
+          query = query.order("hebrew_month_index", { ascending: sortAsc })
+                       .order("hebrew_day", { ascending: sortAsc });
+      } else {
+          query = query.order(sortCol, { ascending: sortAsc });
+      }
+
+      const { data, count, error } = await query.range(from, to);
+
+      if (error) throw error;
+
+      setStories(data || []);
+      setTotalCount(count || 0);
+
+    } catch (error: any) {
+      console.error("Error:", error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchTerm, sortCol, sortAsc]);
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
+
+  // HANDLERS
+  const handleSort = (column: string) => {
+      if (sortCol === column) {
+          setSortAsc(!sortAsc); // Toggle
+      } else {
+          setSortCol(column);
+          setSortAsc(true); // Default asc for new col
+      }
   };
 
-  // Handle Edit Click
-  const handleEditClick = (story: Story) => {
-    setSelectedStory(story);
-    setIsModalOpen(true);
+  const handleSearch = () => {
+    setPage(1); 
+    fetchStories();
   };
 
-  // Handle Modal Actions
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedStory(null);
-  };
-
-  const handleSaved = () => {
-    // Invalidate the query to refetch the data
-    queryClient.invalidateQueries({ queryKey: ["stories"] });
-  };
-
-  const goPrev = () => setCurrentPage((p) => Math.max(1, p - 1));
-  const goNext = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setPageSize(Number(e.target.value));
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50/50 p-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <Skeleton className="h-10 w-72 rounded-lg" />
-            <Skeleton className="mt-2 h-5 w-48 rounded-lg" />
-          </div>
-          <div className="flex gap-3">
-            <Skeleton className="h-10 w-28 rounded-md" />
-            <Skeleton className="h-10 w-32 rounded-md" />
-          </div>
-        </div>
-        <div className="rounded-md border bg-white shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="w-[100px]">ID</TableHead>
-                <TableHead>Hebrew Date</TableHead>
-                <TableHead className="w-[30%]">Title (English)</TableHead>
-                <TableHead className="w-[30%] text-right">Title (Hebrew)</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-4 w-20" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-24" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-4 w-full" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="ml-auto h-4 w-full" />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Skeleton className="mx-auto h-8 w-8 rounded" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-lg text-red-500">
-          Error loading content. Please try again later.
-        </p>
-      </div>
-    );
-  }
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-8">
-      {/* Header Section */}
-      <div className="mb-8 flex items-center justify-between rounded-lg border bg-white p-6 shadow-sm">
+    <div className="min-h-screen bg-gray-50/50 p-6 md:p-10 font-sans">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100 gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            Content Dashboard
-          </h1>
-          <p className="mt-1 text-gray-500">
-            Manage and edit your daily stories.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Content Dashboard</h1>
+          <p className="text-gray-500 mt-1">Total Stories: <b>{totalCount}</b></p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleLogout} className="cursor-pointer">
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
+        <div className="flex gap-3">
+           <Button variant="outline" onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}>
+            <LogOut className="mr-2 h-4 w-4" /> Logout
           </Button>
-          <Button onClick={() => setIsUploadOpen(true)} className="cursor-pointer">
-            <Plus className="mr-2 h-4 w-4 rounded-2xl " />
-            Upload Batch
+          <Button onClick={() => setIsUploadOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-2 h-4 w-4" /> Upload Batch
           </Button>
         </div>
       </div>
 
-      {/* Search and Filter Section */}
-      <div className="mb-8 flex items-center justify-between">
-          <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input 
-                placeholder="Search by title or ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-          </div>
+      {/* Search */}
+      <div className="flex gap-2 mb-6 max-w-md">
+          <Input 
+            placeholder="Search in Title, Body, or ID..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="bg-white"
+          />
+          <Button variant="secondary" onClick={handleSearch}>
+              <Search className="h-4 w-4" />
+          </Button>
       </div>
 
-      {/* Table Section */}
-      <div className="rounded-md border bg-white shadow-sm">
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="w-[100px]">ID</TableHead>
-              <TableHead>Hebrew Date</TableHead>
-              <TableHead className="w-[30%]">Title (English)</TableHead>
-              <TableHead className="w-[30%] text-right">
-                Title (Hebrew)
+          <TableHeader className="bg-gray-50/80">
+            <TableRow>
+              {/* Sortable Headers */}
+              <TableHead onClick={() => handleSort('external_id')} className="cursor-pointer hover:bg-gray-100 w-[100px]">
+                  <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead className="text-center">Actions</TableHead>
+              <TableHead onClick={() => handleSort('date')} className="cursor-pointer hover:bg-gray-100 w-[150px]">
+                  <div className="flex items-center gap-1">Date <ArrowUpDown className="h-3 w-3" /></div>
+              </TableHead>
+              <TableHead onClick={() => handleSort('title_en')} className="cursor-pointer hover:bg-gray-100 w-[30%]">
+                  <div className="flex items-center gap-1">Title (EN) <ArrowUpDown className="h-3 w-3" /></div>
+              </TableHead>
+              <TableHead className="w-[30%] text-right">Title (HE)</TableHead>
+              <TableHead className="text-center w-[100px]">Action</TableHead>
             </TableRow>
           </TableHeader>
+          
           <TableBody>
-            {paginatedStories.map((story) => (
-              <TableRow key={story.id} className="hover:bg-gray-50/50">
-                {/* ID */}
-                <TableCell className="font-mono text-xs font-medium text-gray-500">
-                  {story.external_id}
-                </TableCell>
-
-                {/* Date */}
-                <TableCell className="font-medium">
-                  {story.hebrew_day} {story.hebrew_month}
-                </TableCell>
-
-                {/* Title EN */}
-                <TableCell>
-                  <div
-                    className="max-w-[300px] truncate font-medium text-gray-900"
-                    title={story.title_en || ""}
-                  >
-                    {story.title_en || (
-                      <span className="text-red-400 italic">Missing Title</span>
-                    )}
-                  </div>
-                </TableCell>
-
-                {/* Title HE */}
-                <TableCell className="text-right font-serif text-lg">
-                  <div
-                    className="ml-auto max-w-[300px] truncate"
-                    dir="rtl"
-                    title={story.title_he || ""}
-                  >
-                    {story.title_he || (
-                      <span className="text-sm text-red-400 italic">
-                        Missing Title
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-
-                {/* Actions */}
-                <TableCell className="text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditClick(story)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Pencil className="h-4 w-4 text-blue-600" />
-                    <span className="sr-only">Edit</span>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {loading ? (
+                <TableRow>
+                    <TableCell colSpan={5} className="h-48 text-center">
+                        <div className="flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                    </TableCell>
+                </TableRow>
+            ) : stories.length === 0 ? (
+                <TableRow>
+                    <TableCell colSpan={5} className="h-32 text-center text-gray-500">No stories found.</TableCell>
+                </TableRow>
+            ) : (
+                stories.map((story) => (
+                <TableRow key={story.id} className="hover:bg-blue-50/30">
+                    <TableCell className="font-mono text-xs">{story.external_id}</TableCell>
+                    <TableCell className="font-medium">{story.hebrew_day} {story.hebrew_month}</TableCell>
+                    <TableCell>
+                        <div className="max-w-[300px] truncate" title={story.title_en || ""}>
+                            {story.title_en || <span className="text-red-300 italic text-xs">Missing</span>}
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-right font-serif text-lg">
+                        <div className="max-w-[300px] truncate ml-auto" dir="rtl" title={story.title_he || ""}>
+                            {story.title_he || <span className="text-red-300 italic text-sm">---</span>}
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedStory(story); setIsEditOpen(true); }}>
+                            <Pencil className="h-4 w-4 text-blue-600" />
+                        </Button>
+                    </TableCell>
+                </TableRow>
+                ))
+            )}
           </TableBody>
         </Table>
-
-        {/* Footer info with pagination controls */}
-       <div className="flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs text-gray-500">
-            Showing {startIndex + 1}-{endIndex} of {stories?.length || 0} stories.
-            {" "}Page {currentPage} of {totalPages}.
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Show:</label>
-            <select
-              value={pageSize}
-              onChange={handlePageSizeChange}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goPrev}
-              disabled={currentPage === 1}
-              className="h-8 w-8 p-0"
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="text-sm text-gray-600 px-2">
-              {currentPage}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goNext}
-              disabled={currentPage === totalPages}
-              className="h-8 w-8 p-0"
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+        
+        {/* Pagination Footer */}
+        <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
+             <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1 || loading}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <span className="text-sm text-gray-600">Page {page} / {totalPages || 1}</span>
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages || loading}>
+                  Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
         </div>
       </div>
 
-      {/* Edit Modal Component */}
-      <EditStoryModal
-        story={selectedStory}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSaved={handleSaved}
+      <EditStoryModal 
+        story={selectedStory} isOpen={isEditOpen} 
+        onClose={() => setIsEditOpen(false)} onSaved={fetchStories} 
       />
-
-      <UploadBatchModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-        onSuccess={handleSaved} // Re-use the same invalidation logic
+      <UploadBatchModal 
+        isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} 
+        onSuccess={fetchStories} 
       />
     </div>
   );
