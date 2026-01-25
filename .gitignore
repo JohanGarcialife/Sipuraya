@@ -46,4 +46,6 @@ scripts/data/*
 
 # Ignorar archivos de entorno
 .env
-.env.localscripts/ready_to_upload.json
+.env.local
+
+scripts/ready_to_upload.json
