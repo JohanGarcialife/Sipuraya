@@ -1,7 +1,5 @@
 const path = require('path');
-// Cargar variables de entorno desde la raíz del proyecto Next.js
 require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
-// Fallback: si no existe .env.local, intenta .env
 if (!process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
     require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 }
@@ -33,7 +31,7 @@ function cleanId(id) {
 function smartFindId(line) {
     let match = line.match(/(Ad\d+)/i);
     if (match) return match[1];
-    match = line.match(/(\d+Ad)/i); // RTL Inverted check
+    match = line.match(/(\d+Ad)/i);
     if (match) {
         const numbers = match[1].replace(/Ad/i, '');
         return `Ad${numbers}`;
@@ -77,15 +75,28 @@ async function getFileContent(filePath) {
 // --- PARSING LOGIC FOR ENGLISH BLOCKS ---
 function parseStoryBlock(block) {
   const lines = block.replace(/\r\n/g, '\n').split('\n');
-  const storyData = {};
+  
+  // ✅ CRITICAL FIX: Initialize ALL fields to prevent sticky variable bug
+  const storyData = {
+    id: null,
+    day: null,
+    month: null,
+    monthIndex: null,
+    title_en: null,
+    title_he: null,
+    body: null,
+    tags: [],
+    rabbi_name: null,
+    koteret: null
+  };
+  
   let bodyBuffer = [];
+  let tagsBuffer = [];  // NEW: Extract tags from ### lines
 
-  // Strict Regex for Metadata Only
   const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
   const regexTitleEn = /###English Title:|English Title:|Title:/i;
   const regexTitleHe = /###KOTERET:|###Hebrew Title:|KOTERET:|Hebrew Title:/i;
   
-  // Simplified: Only ignore these EXACT patterns (using regex for precise matching)
   const IGNORE_PATTERNS = [
       /^###English Translation/i,
       /^###Hebrew Translation/i,
@@ -98,7 +109,6 @@ function parseStoryBlock(block) {
     let cleanLine = line.trim();
     if (!cleanLine) return;
 
-    // 1. ID Detection
     if (cleanLine.includes('Ad') || cleanLine.includes('Story ID')) {
         const foundId = smartFindId(cleanLine);
         if (foundId) {
@@ -107,18 +117,12 @@ function parseStoryBlock(block) {
         }
     }
 
-    // 2. Metadata Tags
     if (cleanLine.includes('###') || regexDate.test(cleanLine)) {
-        
-        // Date Fix ("1 of Adar")
         if (regexDate.test(cleanLine)) {
             const rawDate = cleanLine.replace(/###|Date:|תאריך:/gi, '').trim(); 
-            
-            // Day
             const dayMatch = rawDate.match(/(\d+)/);
             if (dayMatch) storyData.day = parseInt(dayMatch[1]);
 
-            // Month
             const lowerDate = rawDate.toLowerCase();
             for (const [monthName, index] of Object.entries(MONTH_MAP)) {
                 if (lowerDate.includes(monthName)) {
@@ -127,10 +131,8 @@ function parseStoryBlock(block) {
                     break; 
                 }
             }
-            // Fallback for month if map fails
             if (!storyData.month) {
                  const parts = rawDate.split(' ');
-                 // Fix: Handle "1 of Adar" format - take the word AFTER "of"
                  if (parts.length > 2 && parts[1].toLowerCase() === 'of') {
                      storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
                  } else if (parts.length > 1 && parts[1].toLowerCase() !== 'of') {
@@ -153,65 +155,146 @@ function parseStoryBlock(block) {
         return; 
     } 
     
-    // 3. Body Content (Greedy - Everything else is body)
-    // Skip only explicit ignore patterns, everything else goes to body
-    if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;
+    // EXTRACTION STEP: Extract tags from ### lines (not title/date/known patterns)
+    if (cleanLine.startsWith('###')) {
+      // Skip known metadata patterns that are NOT tags
+      if (!regexTitleEn.test(cleanLine) && 
+          !regexTitleHe.test(cleanLine) &&
+          !regexDate.test(cleanLine) &&
+          cleanLine !== '###NEW STORY' &&
+          !IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) {
+        // Extract tag content (remove ### delimiters)
+        const tag = cleanLine.replace(/^###|###$/g, '').trim();
+        if (tag && tag.length > 0) {
+          tagsBuffer.push(tag);
+        }
+      }
+      return; // Don't add to body
+    }
     
-    // Skip ONLY standalone page numbers (single digits or simple numbers on their own line)
-    // But allow numbers that are part of text (like "10 people" or "Ad123")
+    if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;
     if (/^\d+$/.test(cleanLine) && cleanLine.length <= 3) return;
 
     bodyBuffer.push(cleanLine);
   });
 
   storyData.body = bodyBuffer.join('\n').trim();
+  storyData.tags = tagsBuffer;  // NEW: Include extracted tags
   return storyData;
 }
 
-// --- SPECIAL PARSER FOR HEBREW BLOCKS (Different Format) ---
-// Hebrew files don't have structured metadata like English files
-// Format: #סיפור_מספר: Ad0069
-// Followed by ALL content until next delimiter
-function parseHebrewBlock(block) {
-  const lines = block.replace(/\r\n/g, '\n').split('\n');
-  const storyData = {};
-  let bodyStarted = false;
-  let bodyBuffer = [];
+// --- SPECIAL SPLIT FOR HEBREW FILES ---
+// Hebrew format: #סיפור_מספר: Ad0100 comes BEFORE ###NEW STORY
+// So we need to split by the ID tag, not by ###NEW STORY
+function splitHebrewStories(text) {
+  const stories = [];
   
-  for (const line of lines) {
-    const cleanLine = line.trim();
-    if (!cleanLine) continue;
+  // Split by the Hebrew ID tag pattern
+  const regex = /#סיפור_מספר:\s*(Ad\d+)/gi;
+  const matches = [];
+  let match;
+  
+  // Find all ID positions
+  while ((match = regex.exec(text)) !== null) {
+    matches.push({
+      id: match[1],
+      position: match.index,
+      fullMatch: match[0]
+    });
+  }
+  
+  // Extract content between IDs
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].position;
+    const end = i < matches.length - 1 ? matches[i + 1].position : text.length;
+    const content = text.substring(start, end);
     
-    // 1. Check for Hebrew ID tag: #סיפור_מספר: Ad0069
-    if (cleanLine.includes('#סיפור_מספר:') || cleanLine.includes('סיפור_מספר')) {
-      const foundId = smartFindId(cleanLine);
-      if (foundId) {
-        storyData.id = cleanId(foundId);
-        bodyStarted = true;
-        continue; // Don't include ID line in body
-      }
-    }
-    
-    // 2. Skip common separator lines
-    if (cleanLine === '###NEW STORY') continue;
-    if (cleanLine.startsWith('###רבי')) continue;  // Rabbi name header
-    if (cleanLine.startsWith('###א\'')) continue;   // Date header like "א' אדר"
-    if (cleanLine.startsWith('###ב\'')) continue;   // Date header like "ב' אדר"
-    if (cleanLine.startsWith('###ג\'')) continue;   // Date header etc.
-    
-    // 3. Capture everything else as body after ID found
-    if (bodyStarted) {
-      // Skip only standalone single-digit page numbers
-      if (/^\d$/.test(cleanLine)) continue;
-      bodyBuffer.push(cleanLine);
+    stories.push({
+      id: cleanId(matches[i].id),
+      content: content
+    });
+  }
+  
+  return stories;
+}
+
+// --- PARSE HEBREW STORY CONTENT ---
+// CRITICAL FIX: mammoth extracts Hebrew content as ONE LONG STRING without proper line breaks
+// Content format: "#סיפור_מספר: Ad0062###BIOGRAPHY###רבי עמנואל חי ריקי...all text..."
+// We can't rely on line splits - just extract everything after the ID tag
+function parseHebrewStory(story) {
+  let content = story.content;
+  const tags = [];
+  let rabbi_name = null;
+  
+  // Remove the ID tag at the beginning
+  content = content.replace(/#סיפור_מספר:\s*Ad\d+/i, '');
+  
+  // Remove ###NEW STORY to expose the rabbi name
+  content = content.replace(/###NEW STORY/gi, '');
+  
+  // EXTRACT RABBI NAME: It's the FIRST ###...### pattern after removing ID and NEW STORY
+  // Example: ###רבי אברהם אבן עזרא###
+  const rabbiMatch = content.match(/###([^#]+)###/);
+  if (rabbiMatch) {
+    rabbi_name = rabbiMatch[1].trim();
+  }
+  
+  // EXTRACTION STEP: Extract ALL ###...### patterns as tags BEFORE removing them
+  const tagPattern = /###([^#\n]+)###/g;
+  let match;
+  while ((match = tagPattern.exec(content)) !== null) {
+    const tag = match[1].trim();
+    // Skip ONLY known metadata patterns that are NOT actual tags
+    if (tag && 
+        tag !== 'NEW STORY' &&
+        !tag.match(/^English Translation/i) &&
+        !tag.match(/^Hebrew Translation/i) &&
+        tag !== rabbi_name) { // Don't add rabbi name as a tag
+      tags.push(tag);
     }
   }
   
-  storyData.body = bodyBuffer.join('\n').trim();
-  return storyData;
+  // CLEANING STEP: Remove ALL ### patterns completely
+  // Strategy: Remove everything that starts with ### until we hit actual Hebrew content
+  
+  // Step 1: Remove closed patterns like ###BIOGRAPHY###
+  content = content.replace(/###[^#]+###/g, '');
+  
+  // Step 2: Remove ###NEW STORY (already did above, but just in case)
+  content = content.replace(/###NEW STORY/gi, '');
+  
+  // Step 3: Remove any remaining ### followed by any characters
+  // This catches patterns like "###א' אדר" that are open-ended
+  content = content.replace(/###[^\u05d0-\u05ea]*([א-ת'])/gu, '$1');
+  
+  // Step 4: Remove plain "NEW STORY" without ###
+  content = content.replace(/NEW STORY/gi, '');
+  // Step 5: Final cleanup - remove any stray ### that might remain
+  content = content.replace(/###/g, '');
+  
+  // Step 6: Remove Hebrew date markers at the beginning (e.g., "א' אדר", "י"א אדר", "כ"ח כסלו")
+  // CRITICAL: Hebrew day numbers use gematria with EMBEDDED quotes (not at the end)
+  // Format: [letter(s)] + [quote] + [optional letter(s)] + [space] + [month name]
+  // Examples: א' (1), י"א (11), כ"ח (28)
+  // Trim first to ensure pattern starts at the beginning
+  content = content.trim();
+  const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+  const dateMarkerPattern = new RegExp(`^[א-ת]+['"\u05F3\u05F4][א-ת]*\s*(${hebrewMonths})`, 'i');
+  content = content.replace(dateMarkerPattern, '');
+  
+  // Clean up multiple spaces and trim again
+  const body = content.replace(/\s+/g, ' ').trim();
+  
+  return {
+    id: story.id,
+    body: body,
+    tags: tags,
+    rabbi_name: rabbi_name  // NEW: Include rabbi name
+  };
 }
 
-// --- AI EMBEDDING (Safe) ---
+// --- AI EMBEDDING ---
 async function generateEmbedding(text) {
   if (!OPENAI_API_KEY || !text || text.length < 5) return null;
   try {
@@ -238,9 +321,12 @@ async function main() {
 
   if (!textEn || !textHe) return;
 
+  // Process English (standard split)
   const splitRegex = /###\s*NEW\s*STORY/i;
   const rawStoriesEn = textEn.split(splitRegex);
-  const rawStoriesHe = textHe.split(splitRegex);
+
+  // Process Hebrew (special split by ID tag)
+  const rawStoriesHe = splitHebrewStories(textHe);
 
   console.log(`📊 Processing: EN (${rawStoriesEn.length}) | HE (${rawStoriesHe.length})`);
 
@@ -258,29 +344,49 @@ async function main() {
         title_en: data.title_en,
         body_en: data.body, 
         title_he: data.title_he || null, 
-        body_he: null
+        body_he: null,
+        rabbi_name: null,  // NEW: Will be filled from Hebrew processing
+        tags: data.tags || []  // NEW: Include English tags
       });
     }
   });
 
-  // Process Hebrew (Merge) - USE SPECIAL HEBREW PARSER
-  rawStoriesHe.forEach(block => {
-    // Hebrew files have different format: #סיפור_מספר: AdXXX followed by ALL content
-    // No structured metadata tags - we need special parsing
-    const data = parseHebrewBlock(block);
+  // Process Hebrew - Merge by ID
+  let mergedCount = 0;
+  rawStoriesHe.forEach(heStory => {
+    const parsed = parseHebrewStory(heStory);
     
-    if (data.id && storiesMap.has(data.id)) {
-      const existing = storiesMap.get(data.id);
-      // Hebrew body is everything after the ID tag
-      if (data.body && data.body.length > 10) {
-        existing.body_he = data.body;
+    if (parsed.id && storiesMap.has(parsed.id)) {
+      const existing = storiesMap.get(parsed.id);
+      if (parsed.body && parsed.body.length > 10) {
+        existing.body_he = parsed.body;
+        
+        // Add rabbi name
+        existing.rabbi_name = parsed.rabbi_name || null;
+        
+        // If title_he is empty, use rabbi_name as fallback
+        if (!existing.title_he && parsed.rabbi_name) {
+          existing.title_he = parsed.rabbi_name;
+        }
+        
+        // Merge Hebrew tags with existing English tags
+        if (parsed.tags && parsed.tags.length > 0) {
+          existing.tags = [...existing.tags, ...parsed.tags];
+        }
+        
+        mergedCount++;
+      } else {
+        console.log(`⚠️  ID ${parsed.id}: body too short (${parsed.body ? parsed.body.length : 0} chars)`);
       }
+    } else {
+      console.log(`⚠️  ID ${parsed.id}: not found in EN map or no ID`);
     }
   });
+  console.log(`\n🔄 Merged ${mergedCount} Hebrew bodies`);
 
   const finalArray = Array.from(storiesMap.values());
   
-  // Generate Embeddings & Append to JSON File
+  // Generate Embeddings & Append to JSON
   let processedData = [];
   for (let i = 0; i < finalArray.length; i++) {
       const story = finalArray[i];
@@ -296,7 +402,7 @@ async function main() {
       if (i % 10 === 0) process.stdout.write('.');
   }
 
-  // Save to JSON (Append mode logic)
+  // Save to JSON (Append mode)
   let existingData = [];
   if (fs.existsSync(OUTPUT_JSON)) {
       try {

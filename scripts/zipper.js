@@ -75,7 +75,21 @@ async function getFileContent(filePath) {
 // --- PARSING LOGIC FOR ENGLISH BLOCKS ---
 function parseStoryBlock(block) {
   const lines = block.replace(/\r\n/g, '\n').split('\n');
-  const storyData = {};
+  
+  // ✅ CRITICAL FIX: Initialize ALL fields to prevent sticky variable bug
+  const storyData = {
+    id: null,
+    day: null,
+    month: null,
+    monthIndex: null,
+    title_en: null,
+    title_he: null,
+    body: null,
+    tags: [],
+    rabbi_name: null,
+    koteret: null
+  };
+  
   let bodyBuffer = [];
   let tagsBuffer = [];  // NEW: Extract tags from ### lines
 
@@ -211,11 +225,22 @@ function splitHebrewStories(text) {
 function parseHebrewStory(story) {
   let content = story.content;
   const tags = [];
+  let rabbi_name = null;
   
   // Remove the ID tag at the beginning
   content = content.replace(/#סיפור_מספר:\s*Ad\d+/i, '');
   
-  // EXTRACTION STEP: Extract ###...### patterns as tags BEFORE removing them
+  // Remove ###NEW STORY to expose the rabbi name
+  content = content.replace(/###NEW STORY/gi, '');
+  
+  // EXTRACT RABBI NAME: It's the FIRST ###...### pattern after removing ID and NEW STORY
+  // Example: ###רבי אברהם אבן עזרא###
+  const rabbiMatch = content.match(/###([^#]+)###/);
+  if (rabbiMatch) {
+    rabbi_name = rabbiMatch[1].trim();
+  }
+  
+  // EXTRACTION STEP: Extract ALL ###...### patterns as tags BEFORE removing them
   const tagPattern = /###([^#\n]+)###/g;
   let match;
   while ((match = tagPattern.exec(content)) !== null) {
@@ -224,7 +249,8 @@ function parseHebrewStory(story) {
     if (tag && 
         tag !== 'NEW STORY' &&
         !tag.match(/^English Translation/i) &&
-        !tag.match(/^Hebrew Translation/i)) {
+        !tag.match(/^Hebrew Translation/i) &&
+        tag !== rabbi_name) { // Don't add rabbi name as a tag
       tags.push(tag);
     }
   }
@@ -235,23 +261,36 @@ function parseHebrewStory(story) {
   // Step 1: Remove closed patterns like ###BIOGRAPHY###
   content = content.replace(/###[^#]+###/g, '');
   
-  // Step 2: Remove ###NEW STORY
+  // Step 2: Remove ###NEW STORY (already did above, but just in case)
   content = content.replace(/###NEW STORY/gi, '');
   
   // Step 3: Remove any remaining ### followed by any characters
   // This catches patterns like "###א' אדר" that are open-ended
   content = content.replace(/###[^\u05d0-\u05ea]*([א-ת'])/gu, '$1');
   
-  // Step 4: Final cleanup - remove any stray ### that might remain
+  // Step 4: Remove plain "NEW STORY" without ###
+  content = content.replace(/NEW STORY/gi, '');
+  // Step 5: Final cleanup - remove any stray ### that might remain
   content = content.replace(/###/g, '');
   
-  // Clean up multiple spaces and trim
+  // Step 6: Remove Hebrew date markers at the beginning (e.g., "א' אדר", "י"א אדר", "כ"ח כסלו")
+  // CRITICAL: Hebrew day numbers use gematria with EMBEDDED quotes (not at the end)
+  // Format: [letter(s)] + [quote] + [optional letter(s)] + [space] + [month name]
+  // Examples: א' (1), י"א (11), כ"ח (28)
+  // Trim first to ensure pattern starts at the beginning
+  content = content.trim();
+  const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+  const dateMarkerPattern = new RegExp(`^[א-ת]+['\"׳״][א-ת]*\\s*(${hebrewMonths})`, 'i');
+        content = content.replace(dateMarkerPattern, '');
+    
+  // Clean up multiple spaces and trim again
   const body = content.replace(/\s+/g, ' ').trim();
   
   return {
     id: story.id,
     body: body,
-    tags: tags  // NEW: Include extracted tags
+    tags: tags,
+    rabbi_name: rabbi_name  // NEW: Include rabbi name
   };
 }
 
@@ -306,6 +345,7 @@ async function main() {
         body_en: data.body, 
         title_he: data.title_he || null, 
         body_he: null,
+        rabbi_name: null,  // NEW: Will be filled from Hebrew processing
         tags: data.tags || []  // NEW: Include English tags
       });
     }
@@ -320,10 +360,20 @@ async function main() {
       const existing = storiesMap.get(parsed.id);
       if (parsed.body && parsed.body.length > 10) {
         existing.body_he = parsed.body;
+        
+        // Add rabbi name
+        existing.rabbi_name = parsed.rabbi_name || null;
+        
+        // If title_he is empty, use rabbi_name as fallback
+        if (!existing.title_he && parsed.rabbi_name) {
+          existing.title_he = parsed.rabbi_name;
+        }
+        
         // Merge Hebrew tags with existing English tags
         if (parsed.tags && parsed.tags.length > 0) {
           existing.tags = [...existing.tags, ...parsed.tags];
         }
+        
         mergedCount++;
       } else {
         console.log(`⚠️  ID ${parsed.id}: body too short (${parsed.body ? parsed.body.length : 0} chars)`);

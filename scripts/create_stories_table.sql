@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS stories (
   title_he TEXT,
   body_en TEXT,
   body_he TEXT,
+  rabbi_name TEXT,  -- NEW: Extracted from Hebrew file (3rd line after ###NEW STORY)
   embedding vector(1536),
   is_published BOOLEAN DEFAULT true,
   tags TEXT[] DEFAULT '{}',  -- NEW: Metadata tags array
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS stories (
 CREATE INDEX IF NOT EXISTS idx_stories_external_id ON stories(external_id);
 CREATE INDEX IF NOT EXISTS idx_stories_hebrew_month ON stories(hebrew_month);
 CREATE INDEX IF NOT EXISTS idx_stories_is_published ON stories(is_published);
+CREATE INDEX IF NOT EXISTS idx_stories_rabbi_name ON stories(rabbi_name);  -- NEW
 CREATE INDEX IF NOT EXISTS idx_stories_tags ON stories USING GIN(tags);
 
 -- Create index for vector similarity search (if using pgvector)

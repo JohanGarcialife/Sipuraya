@@ -8,5 +8,6 @@ export type Story = {
   title_he: string;
   body_en: string;
   body_he: string;
+  rabbi_name?: string;  // NEW: Rabbi name from Hebrew file
   tags?: string[];  // NEW: Metadata tags array
 };

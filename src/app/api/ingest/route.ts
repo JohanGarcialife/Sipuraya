@@ -52,9 +52,24 @@ async function extractText(buffer: Buffer, fileType: string) {
 
 function parseStoryBlock(block: string) {
   const lines = block.replace(/\r\n/g, '\n').split('\n');
-  const storyData: any = {};
+  
+  // ✅ CRITICAL FIX: Initialize ALL fields to prevent sticky variable bug
+  // Each story gets a FRESH object - no data leaks between stories
+  const storyData: any = {
+    id: null,
+    day: null,
+    month: null,
+    monthIndex: null,
+    title_en: null,
+    title_he: null,
+    body: null,
+    tags: [],           // Always start with empty array
+    rabbi_name: null,   // NEW field
+    koteret: null       // Temp field for ###KOTERET extraction
+  };
+  
   let bodyBuffer: string[] = [];
-  let tagsBuffer: string[] = [];  // NEW: Extract tags from ### lines
+  let tagsBuffer: string[] = [];
 
   const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
   const regexTitleEn = /###English Title:|English Title:|Title:/i;
@@ -112,7 +127,9 @@ function parseStoryBlock(block: string) {
             return;
         }
         if (regexTitleHe.test(cleanLine)) {
-            storyData.title_he = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
+            const heTitle = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
+            storyData.title_he = heTitle;
+            storyData.koteret = heTitle;  // Also save as koteret
             return;
         }
         return; 
@@ -134,6 +151,9 @@ function parseStoryBlock(block: string) {
       }
       return; // Don't add to body
     }
+    
+    // Also skip plain "NEW STORY" without ###
+    if (cleanLine === 'NEW STORY' || cleanLine.includes('NEW STORY')) return;
     
     // Body Content: Skip only explicit ignore patterns, everything else goes to body
     if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;

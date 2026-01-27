@@ -27,6 +27,7 @@ export type Story = {
   title_he: string;
   body_en: string;
   body_he: string;
+  rabbi_name?: string;  // NEW: Rabbi name from Hebrew file
   tags?: string[];  // NEW: Metadata tags array
 };
 
@@ -170,10 +171,11 @@ export default function AdminDashboard() {
               <TableHead onClick={() => handleSort('date')} className="cursor-pointer hover:bg-gray-100 w-[150px]">
                   <div className="flex items-center gap-1">Date <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead onClick={() => handleSort('title_en')} className="cursor-pointer hover:bg-gray-100 w-[30%]">
+              <TableHead className="w-[200px] text-right" dir="rtl">Rabbi Name</TableHead>
+              <TableHead onClick={() => handleSort('title_en')} className="cursor-pointer hover:bg-gray-100 w-[25%]">
                   <div className="flex items-center gap-1">Title (EN) <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead className="w-[30%] text-right">Title (HE)</TableHead>
+              <TableHead className="w-[25%] text-right">Title (HE)</TableHead>
               <TableHead className="text-center w-[100px]">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -187,13 +189,18 @@ export default function AdminDashboard() {
                 </TableRow>
             ) : stories.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center text-gray-500">No stories found.</TableCell>
+                    <TableCell colSpan={6} className="h-32 text-center text-gray-500">No stories found.</TableCell>
                 </TableRow>
             ) : (
                 stories.map((story) => (
                 <TableRow key={story.id} className="hover:bg-blue-50/30">
                     <TableCell className="font-mono text-xs">{story.external_id}</TableCell>
                     <TableCell className="font-medium">{story.hebrew_day} {story.hebrew_month}</TableCell>
+                    <TableCell className="text-right font-serif text-lg" dir="rtl">
+                        <div className="max-w-[200px] truncate ml-auto">
+                            {story.rabbi_name || <span className="text-gray-400 text-sm">—</span>}
+                        </div>
+                    </TableCell>
                     <TableCell>
                         <div className="max-w-[300px] truncate" title={story.title_en || ""}>
                             {story.title_en || <span className="text-red-300 italic text-xs">Missing</span>}
