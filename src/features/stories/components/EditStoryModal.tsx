@@ -36,6 +36,7 @@ export default function EditStoryModal({
     title_he: story?.title_he || "",
     body_en: story?.body_en || "",
     body_he: story?.body_he || "",
+    tags: story?.tags || [],  // NEW: Tags field
   });
 
   // When the story prop (specifically the ID) changes, update the form data
@@ -48,6 +49,7 @@ export default function EditStoryModal({
         title_he: story.title_he || "",
         body_en: story.body_en || "",
         body_he: story.body_he || "",
+        tags: story.tags || [],  // NEW: Tags field
       });
     }
   }, [story?.id]); // Depend on story.id to re-initialize for different stories
@@ -67,6 +69,7 @@ export default function EditStoryModal({
         title_he: formData.title_he,
         body_en: formData.body_en,
         body_he: formData.body_he,
+        tags: formData.tags,  // NEW: Save tags
       })
       .eq("id", story.id);
 
@@ -132,6 +135,26 @@ export default function EditStoryModal({
               />
             </div>
           </div>
+        </div>
+
+        {/* Tags Section - Full Width */}
+        <div className="space-y-2">
+          <Label>Tags / Metadata</Label>
+          <Textarea
+            className="min-h-[60px]" 
+            placeholder="Enter tags separated by commas (e.g., BIOGRAPHY, Pesach, Education)"
+            value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
+            onChange={(e) => {
+              const tagsArray = e.target.value
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+              setFormData((prev) => ({ ...prev, tags: tagsArray }));
+            }}
+          />
+          <p className="text-xs text-gray-500">
+            Internal organization tags (extracted from ### markers in source files)
+          </p>
         </div>
 
         <DialogFooter>

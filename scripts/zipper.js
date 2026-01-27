@@ -77,6 +77,7 @@ function parseStoryBlock(block) {
   const lines = block.replace(/\r\n/g, '\n').split('\n');
   const storyData = {};
   let bodyBuffer = [];
+  let tagsBuffer = [];  // NEW: Extract tags from ### lines
 
   const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
   const regexTitleEn = /###English Title:|English Title:|Title:/i;
@@ -140,6 +141,23 @@ function parseStoryBlock(block) {
         return; 
     } 
     
+    // EXTRACTION STEP: Extract tags from ### lines (not title/date/known patterns)
+    if (cleanLine.startsWith('###')) {
+      // Skip known metadata patterns that are NOT tags
+      if (!regexTitleEn.test(cleanLine) && 
+          !regexTitleHe.test(cleanLine) &&
+          !regexDate.test(cleanLine) &&
+          cleanLine !== '###NEW STORY' &&
+          !IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) {
+        // Extract tag content (remove ### delimiters)
+        const tag = cleanLine.replace(/^###|###$/g, '').trim();
+        if (tag && tag.length > 0) {
+          tagsBuffer.push(tag);
+        }
+      }
+      return; // Don't add to body
+    }
+    
     if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;
     if (/^\d+$/.test(cleanLine) && cleanLine.length <= 3) return;
 
@@ -147,6 +165,7 @@ function parseStoryBlock(block) {
   });
 
   storyData.body = bodyBuffer.join('\n').trim();
+  storyData.tags = tagsBuffer;  // NEW: Include extracted tags
   return storyData;
 }
 
@@ -191,19 +210,48 @@ function splitHebrewStories(text) {
 // We can't rely on line splits - just extract everything after the ID tag
 function parseHebrewStory(story) {
   let content = story.content;
+  const tags = [];
   
   // Remove the ID tag at the beginning
   content = content.replace(/#סיפור_מספר:\s*Ad\d+/i, '');
   
-  // Remove ###NEW STORY if present
+  // EXTRACTION STEP: Extract ###...### patterns as tags BEFORE removing them
+  const tagPattern = /###([^#\n]+)###/g;
+  let match;
+  while ((match = tagPattern.exec(content)) !== null) {
+    const tag = match[1].trim();
+    // Skip ONLY known metadata patterns that are NOT actual tags
+    if (tag && 
+        tag !== 'NEW STORY' &&
+        !tag.match(/^English Translation/i) &&
+        !tag.match(/^Hebrew Translation/i)) {
+      tags.push(tag);
+    }
+  }
+  
+  // CLEANING STEP: Remove ALL ### patterns completely
+  // Strategy: Remove everything that starts with ### until we hit actual Hebrew content
+  
+  // Step 1: Remove closed patterns like ###BIOGRAPHY###
+  content = content.replace(/###[^#]+###/g, '');
+  
+  // Step 2: Remove ###NEW STORY
   content = content.replace(/###NEW STORY/gi, '');
   
-  // Trim and return
-  const body = content.trim();
+  // Step 3: Remove any remaining ### followed by any characters
+  // This catches patterns like "###א' אדר" that are open-ended
+  content = content.replace(/###[^\u05d0-\u05ea]*([א-ת'])/gu, '$1');
+  
+  // Step 4: Final cleanup - remove any stray ### that might remain
+  content = content.replace(/###/g, '');
+  
+  // Clean up multiple spaces and trim
+  const body = content.replace(/\s+/g, ' ').trim();
   
   return {
     id: story.id,
-    body: body
+    body: body,
+    tags: tags  // NEW: Include extracted tags
   };
 }
 
@@ -257,7 +305,8 @@ async function main() {
         title_en: data.title_en,
         body_en: data.body, 
         title_he: data.title_he || null, 
-        body_he: null
+        body_he: null,
+        tags: data.tags || []  // NEW: Include English tags
       });
     }
   });
@@ -271,6 +320,10 @@ async function main() {
       const existing = storiesMap.get(parsed.id);
       if (parsed.body && parsed.body.length > 10) {
         existing.body_he = parsed.body;
+        // Merge Hebrew tags with existing English tags
+        if (parsed.tags && parsed.tags.length > 0) {
+          existing.tags = [...existing.tags, ...parsed.tags];
+        }
         mergedCount++;
       } else {
         console.log(`⚠️  ID ${parsed.id}: body too short (${parsed.body ? parsed.body.length : 0} chars)`);

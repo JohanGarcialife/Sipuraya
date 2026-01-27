@@ -54,6 +54,7 @@ function parseStoryBlock(block: string) {
   const lines = block.replace(/\r\n/g, '\n').split('\n');
   const storyData: any = {};
   let bodyBuffer: string[] = [];
+  let tagsBuffer: string[] = [];  // NEW: Extract tags from ### lines
 
   const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
   const regexTitleEn = /###English Title:|English Title:|Title:/i;
@@ -117,6 +118,23 @@ function parseStoryBlock(block: string) {
         return; 
     } 
     
+    // EXTRACTION STEP: Extract tags from ### lines (not title/date/known patterns)
+    if (cleanLine.startsWith('###')) {
+      // Skip known metadata patterns that are NOT tags
+      if (!regexTitleEn.test(cleanLine) && 
+          !regexTitleHe.test(cleanLine) &&
+          !regexDate.test(cleanLine) &&
+          cleanLine !== '###NEW STORY' &&
+          !IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) {
+        // Extract tag content (remove ### delimiters)
+        const tag = cleanLine.replace(/^###|###$/g, '').trim();
+        if (tag && tag.length > 0) {
+          tagsBuffer.push(tag);
+        }
+      }
+      return; // Don't add to body
+    }
+    
     // Body Content: Skip only explicit ignore patterns, everything else goes to body
     if (IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) return;
     
@@ -127,6 +145,7 @@ function parseStoryBlock(block: string) {
   });
 
   storyData.body = bodyBuffer.join('\n').trim();
+  storyData.tags = tagsBuffer;  // NEW: Include extracted tags
   return storyData;
 }
 

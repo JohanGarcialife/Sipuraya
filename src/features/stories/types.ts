@@ -8,4 +8,5 @@ export type Story = {
   title_he: string;
   body_en: string;
   body_he: string;
+  tags?: string[];  // NEW: Metadata tags array
 };
