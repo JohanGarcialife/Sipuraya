@@ -6,9 +6,8 @@ export const getStories = async (): Promise<Story[]> => {
   const { data, error } = await supabase
     .from("stories")
     .select("*")
-    // Sort chronologically: Month Index (1-12) then Day
-    .order("hebrew_month_index", { ascending: true })
-    .order("hebrew_day", { ascending: true });
+    // Sort chronologically by English date (simple format: "1 Adar", "2 Adar", etc.)
+    .order("date_en", { ascending: true });
 
   if (error) {
     console.error("Error fetching stories:", error);

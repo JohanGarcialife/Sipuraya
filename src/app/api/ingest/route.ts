@@ -18,6 +18,37 @@ const MONTH_MAP: Record<string, number> = {
   'adar': 12, 'adar i': 12, 'adar ii': 13, 'adar 1': 12, 'adar 2': 13
 };
 
+// Hebrew month names for date formatting
+const HEBREW_MONTH_NAMES: Record<string, string> = {
+  'Nisan': 'ניסן', 'Iyar': 'אייר', 'Sivan': 'סיון',
+  'Tamuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
+  'Tishrei': 'תשרי', 'Cheshvan': 'חשון', 'Kislev': 'כסלו',
+  'Tevet': 'טבת', 'Shevat': 'שבט', 'Adar': 'אדר',
+  'Adar I': 'אדר א', 'Adar II': 'אדר ב'
+};
+
+// Hebrew day numbers in gematria format
+const HEBREW_DAY_NUMBERS: Record<number, string> = {
+  1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'",
+  6: "ו'", 7: "ז'", 8: "ח'", 9: "ט'", 10: "י'",
+  11: 'י"א', 12: 'י"ב', 13: 'י"ג', 14: 'י"ד', 15: 'ט"ו',
+  16: 'ט"ז', 17: 'י"ז', 18: 'י"ח', 19: 'י"ט', 20: "כ'",
+  21: 'כ"א', 22: 'כ"ב', 23: 'כ"ג', 24: 'כ"ד', 25: 'כ"ה',
+  26: 'כ"ו', 27: 'כ"ז', 28: 'כ"ח', 29: 'כ"ט', 30: "ל'"
+};
+
+// Format Hebrew date: "א' אדר"
+function formatHebrewDate(day: number, monthEnglish: string): string {
+  const hebrewDay = HEBREW_DAY_NUMBERS[day] || day.toString();
+  const hebrewMonth = HEBREW_MONTH_NAMES[monthEnglish] || monthEnglish;
+  return `${hebrewDay} ${hebrewMonth}`;
+}
+
+// Format English date: "1 Adar"  
+function formatEnglishDate(day: number, monthEnglish: string): string {
+  return `${day} ${monthEnglish}`;
+}
+
 function cleanId(id: string) {
   if (!id) return null;
   return id.replace(/[^a-zA-Z0-9]/g, '');
@@ -218,15 +249,20 @@ export async function POST(req: NextRequest) {
     rawStoriesEn.forEach(block => {
       const data = parseStoryBlock(block);
       if (data.id) {
+        const day = data.day || 1;
+        const month = data.month || 'Adar';
+        
         storiesMap.set(data.id, {
-          external_id: data.id,
-          hebrew_day: data.day || 1,
-          hebrew_month: data.month || 'Adar',
-          hebrew_month_index: data.monthIndex || 12,
+          story_id: data.id,                                    // NEW: story_id as PRIMARY KEY
+          date_he: formatHebrewDate(day, month),               // NEW: "א' אדר" format
+          date_en: formatEnglishDate(day, month),              // NEW: "1 Adar" format  
+          rabbi_he: null,                                      // NEW: Will be filled from Hebrew file
+          rabbi_en: null,                                      // NEW: Will extract from English content
           title_en: data.title_en,
-          body_en: data.body, 
-          title_he: data.title_he || null, 
-          body_he: null
+          title_he: data.title_he || null,
+          body_en: data.body,
+          body_he: null,
+          tags: data.tags || [],                               // NEW: Tags array
         });
       }
     });
@@ -241,6 +277,12 @@ export async function POST(req: NextRequest) {
         else {
              const rawClean = block.replace(/###.+/g, '').trim();
              if(rawClean.length > 10) existing.body_he = rawClean;
+        }
+        // NEW: Extract rabbi_he from Hebrew content (from ### tags or body)
+        if (data.rabbi_name) existing.rabbi_he = data.rabbi_name;
+        // Merge tags
+        if (data.tags && data.tags.length > 0) {
+          existing.tags = [...new Set([...existing.tags, ...data.tags])];
         }
         matchCount++;
       }
@@ -258,7 +300,7 @@ export async function POST(req: NextRequest) {
             ...story,
             embedding,
             is_published: true
-        }, { onConflict: 'external_id' });
+        }, { onConflict: 'story_id' });
 
         if (!error) processedCount++;
     }

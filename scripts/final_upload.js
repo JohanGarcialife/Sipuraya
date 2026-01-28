@@ -36,7 +36,7 @@ async function main() {
         batch.push(data[i]);
         
         if (batch.length >= BATCH_SIZE || i === data.length - 1) {
-            const { error } = await supabase.from('stories').upsert(batch, { onConflict: 'external_id' });
+            const { error } = await supabase.from('stories').upsert(batch, { onConflict: 'story_id' });
             if (error) console.error("❌ DB Error:", error.message);
             else process.stdout.write('✅');
             batch = [];

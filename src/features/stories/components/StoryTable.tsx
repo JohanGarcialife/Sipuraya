@@ -27,7 +27,10 @@ export default function StoryTable({ initialStories }: StoryTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-[100px]">ID</TableHead>
-            <TableHead>Hebrew Date</TableHead>
+            <TableHead className="w-[120px]">Hebrew Date</TableHead>
+            <TableHead className="w-[120px]">English Date</TableHead>
+            <TableHead>Rabbi (HE)</TableHead>
+            <TableHead>Rabbi (EN)</TableHead>
             <TableHead>Title (EN)</TableHead>
             <TableHead className="text-right">Title (HE)</TableHead>
             <TableHead className="w-[100px]">Actions</TableHead>
@@ -35,10 +38,21 @@ export default function StoryTable({ initialStories }: StoryTableProps) {
         </TableHeader>
         <TableBody>
           {stories.map((story) => (
-            <TableRow key={story.id}>
-              <TableCell className="font-medium">{story.external_id}</TableCell>
-              <TableCell>
-                {story.hebrew_day} {story.hebrew_month}
+            <TableRow key={story.story_id}>
+              <TableCell className="font-medium">{story.story_id}</TableCell>
+              <TableCell className="font-hebrew">{story.date_he}</TableCell>
+              <TableCell>{story.date_en}</TableCell>
+              <TableCell 
+                className="max-w-[150px] truncate font-hebrew"
+                title={story.rabbi_he || ""}
+              >
+                {story.rabbi_he || "---"}
+              </TableCell>
+              <TableCell 
+                className="max-w-[150px] truncate"
+                title={story.rabbi_en || ""}
+              >
+                {story.rabbi_en || "---"}
               </TableCell>
               <TableCell
                 className="max-w-[200px] truncate"
@@ -47,7 +61,7 @@ export default function StoryTable({ initialStories }: StoryTableProps) {
                 {story.title_en || "Untitled"}
               </TableCell>
               <TableCell
-                className="max-w-[200px] truncate text-right"
+                className="max-w-[200px] truncate text-right font-hebrew"
                 title={story.title_he || ""}
               >
                 {story.title_he || "---"}

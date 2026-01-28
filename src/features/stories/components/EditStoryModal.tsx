@@ -52,7 +52,7 @@ export default function EditStoryModal({
         tags: story.tags || [],  // NEW: Tags field
       });
     }
-  }, [story?.id]); // Depend on story.id to re-initialize for different stories
+  }, [story?.story_id]); // Depend on story.story_id to re-initialize for different stories
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -71,7 +71,7 @@ export default function EditStoryModal({
         body_he: formData.body_he,
         tags: formData.tags,  // NEW: Save tags
       })
-      .eq("id", story.id);
+      .eq("story_id", story.story_id);
 
     setLoading(false);
 
@@ -92,7 +92,7 @@ export default function EditStoryModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Story: {story.external_id}</DialogTitle>
+          <DialogTitle>Edit Story: {story.story_id}</DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-6 py-4">

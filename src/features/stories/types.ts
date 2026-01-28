@@ -1,13 +1,16 @@
-// Matching the Supabase Schema from admin/page.tsx
+// Matching the NEW Supabase Schema with 10 columns
 export type Story = {
-  id: number;
-  external_id: string;
-  hebrew_month: string;
-  hebrew_day: number;
-  title_en: string;
-  title_he: string;
-  body_en: string;
-  body_he: string;
-  rabbi_name?: string;  // NEW: Rabbi name from Hebrew file
-  tags?: string[];  // NEW: Metadata tags array
+  story_id: string;            // External ID (Ad0001, Ad0002, etc.) - PRIMARY KEY
+  rabbi_he: string | null;     // Rabbi name in Hebrew
+  rabbi_en: string | null;     // Rabbi name in English
+  date_he: string;             // Hebrew date format: "א' אדר"
+  date_en: string;             // English date format: "1 Adar"
+  title_he: string | null;     // Hebrew title
+  title_en: string | null;     // English title
+  body_he: string | null;      // Hebrew story content
+  body_en: string | null;      // English story content
+  tags: string[];              // Tags array
+  embedding?: number[] | null; // AI embedding (optional)
+  is_published?: boolean;      // Publishing status
+  created_at?: string;         // Timestamp
 };

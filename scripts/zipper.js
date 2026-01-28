@@ -22,7 +22,70 @@ const MONTH_MAP = {
   'adar': 12, 'adar i': 12, 'adar ii': 13, 'adar 1': 12, 'adar 2': 13
 };
 
+// Hebrew month name mapping (English → Hebrew)
+const HEBREW_MONTH_NAMES = {
+  'Nisan': 'ניסן',
+  'Iyar': 'אייר',
+  'Sivan': 'סיון',
+  'Tamuz': 'תמוז',
+  'Av': 'אב',
+  'Elul': 'אלול',
+  'Tishrei': 'תשרי',
+  'Cheshvan': 'חשון',
+  'Kislev': 'כסלו',
+  'Tevet': 'טבת',
+  'Shevat': 'שבט',
+  'Adar': 'אדר',
+  'Adar I': 'אדר א׳',
+  'Adar II': 'אדר ב׳'
+};
+
+// Hebrew gematria numbers for days (1-30)
+const HEBREW_DAY_NUMBERS = {
+  1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'",
+  6: "ו'", 7: "ז'", 8: "ח'", 9: "ט'", 10: "י'",
+  11: "י\"א", 12: "י\"ב", 13: "י\"ג", 14: "י\"ד", 15: "ט\"ו",
+  16: "ט\"ז", 17: "י\"ז", 18: "י\"ח", 19: "י\"ט", 20: "כ'",
+  21: "כ\"א", 22: "כ\"ב", 23: "כ\"ג", 24: "כ\"ד", 25: "כ\"ה",
+  26: "כ\"ו", 27: "כ\"ז", 28: "כ\"ח", 29: "כ\"ט", 30: "ל'"
+};
+
 // --- HELPERS ---
+
+// Format Hebrew date: "א' אדר", "י"א ניסן", etc.
+function formatHebrewDate(day, monthEnglish) {
+  const hebrewDay = HEBREW_DAY_NUMBERS[day] || day.toString();
+  const hebrewMonth = HEBREW_MONTH_NAMES[monthEnglish] || monthEnglish;
+  return `${hebrewDay} ${hebrewMonth}`;
+}
+
+// Format English date: "1 Adar", "15 Nisan", etc. (NO ordinal)
+function formatEnglishDate(day, monthEnglish) {
+  return `${day} ${monthEnglish}`;
+}
+
+// Extract English rabbi name from story content
+function extractEnglishRabbiName(englishBody) {
+  if (!englishBody) return null;
+  
+  // Pattern 1: "Rabbi [Name]" at the beginning of the text
+  const pattern1 = /^Rabbi\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+[A-Z][a-z]+)?)/m;
+  const match1 = englishBody.match(pattern1);
+  if (match1) return `Rabbi ${match1[1]}`;
+  
+  // Pattern 2: Look for rabbi name in first few sentences
+  const firstPart = englishBody.substring(0, 500);
+  const pattern2 = /(?:the\s+)?(?:holy\s+)?Rabbi\s+([A-Z][a-z]+(?:\s+(?:ben\s+)?[A-Z][a-z]+)*)/i;
+  const match2 = firstPart.match(pattern2);
+  if (match2) return `Rabbi ${match2[1]}`;
+  
+  // Pattern 3: "R' [Name]" or "R. [Name]"
+  const pattern3 = /R['.\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/;
+  const match3 = firstPart.match(pattern3);
+  if (match3) return `Rabbi ${match3[1]}`;
+  
+  return null;
+}
 function cleanId(id) {
   if (!id) return null;
   return id.replace(/[^a-zA-Z0-9]/g, '');
@@ -386,17 +449,35 @@ async function main() {
 
   const finalArray = Array.from(storiesMap.values());
   
-  // Generate Embeddings & Append to JSON
+  // Transform to new schema structure & Generate Embeddings
   let processedData = [];
   for (let i = 0; i < finalArray.length; i++) {
       const story = finalArray[i];
+      
+      // Extract English rabbi name from body
+      const rabbi_en = extractEnglishRabbiName(story.body_en);
+      
+      // Format dates
+      const date_he = formatHebrewDate(story.hebrew_day, story.hebrew_month);
+      const date_en = formatEnglishDate(story.hebrew_day, story.hebrew_month);
+      
       const textForAI = story.body_he || story.body_en;
       const embedding = await generateEmbedding(textForAI);
       
+      // NEW SCHEMA: 10 exact columns as client specified
       processedData.push({
-          ...story,
-          embedding,
-          is_published: true
+          story_id: story.external_id,           // Column 1: Story #
+          rabbi_he: story.rabbi_name || null,    // Column 2: Rabbi Name Hebrew
+          rabbi_en: rabbi_en,                    // Column 3: Rabbi Name English
+          date_he: date_he,                      // Column 4: Date Hebrew (e.g., "א' אדר")
+          date_en: date_en,                      // Column 5: Date English (e.g., "1 Adar")
+          title_he: story.title_he || null,      // Column 6: Title Hebrew
+          title_en: story.title_en || null,      // Column 7: Title English
+          body_he: story.body_he || null,        // Column 8: Story Content Hebrew
+          body_en: story.body_en || null,        // Column 9: Story Content English
+          tags: [...new Set(story.tags)],        // Column 10: Tags (array, deduplicated)
+          embedding: embedding,                  // Keep for AI, but may not upload
+          is_published: true                     // Keep for DB
       });
       
       if (i % 10 === 0) process.stdout.write('.');

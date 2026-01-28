@@ -17,18 +17,19 @@ import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, Arrow
 import EditStoryModal from "../../features/stories/components/EditStoryModal";
 import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal"; 
 
-// TYPES
+// TYPES - Matching NEW database schema
 export type Story = {
-  id: number;
-  external_id: string;
-  hebrew_month: string;
-  hebrew_day: number;
-  title_en: string;
-  title_he: string;
-  body_en: string;
-  body_he: string;
-  rabbi_name?: string;  // NEW: Rabbi name from Hebrew file
-  tags?: string[];  // NEW: Metadata tags array
+  story_id: string;            // External ID (Ad0001) - PRIMARY KEY
+  rabbi_he: string | null;     // Rabbi name in Hebrew
+  rabbi_en: string | null;     // Rabbi name in English
+  date_he: string;             // Hebrew date: "א' אדר"
+  date_en: string;             // English date: "1 Adar"
+  title_he: string | null;     // Hebrew title
+  title_en: string | null;     // English title
+  body_he: string | null;      // Hebrew story content
+  body_en: string | null;      // English story content
+  tags: string[];              // Tags array
+  created_at?: string;         // Timestamp
 };
 
 const PAGE_SIZE = 50;
@@ -47,7 +48,7 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   
   // Sorting State
-  const [sortCol, setSortCol] = useState<string>("id");
+  const [sortCol, setSortCol] = useState<string>("story_id");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   
   // Modals
@@ -78,18 +79,13 @@ export default function AdminDashboard() {
       // FIX: Scope Search (Body included)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
-        // Syntax for searching multiple columns in Supabase
-        query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,external_id.ilike.%${term}%`);
+        // Syntax for searching multiple columns in Supabase  
+        query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
       }
 
       // FIX: Dynamic Sorting
-      // If sorting by date, we actually sort by the index columns
-      if (sortCol === 'date') {
-          query = query.order("hebrew_month_index", { ascending: sortAsc })
-                       .order("hebrew_day", { ascending: sortAsc });
-      } else {
-          query = query.order(sortCol, { ascending: sortAsc });
-      }
+      // Date sorting now uses date_en for simple numeric sorting
+      query = query.order(sortCol, { ascending: sortAsc });
 
       const { data, count, error } = await query.range(from, to);
 
@@ -165,13 +161,17 @@ export default function AdminDashboard() {
           <TableHeader className="bg-gray-50/80">
             <TableRow>
               {/* Sortable Headers */}
-              <TableHead onClick={() => handleSort('external_id')} className="cursor-pointer hover:bg-gray-100 w-[100px]">
+              <TableHead onClick={() => handleSort('story_id')} className="cursor-pointer hover:bg-gray-100 w-[100px]">
                   <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead onClick={() => handleSort('date')} className="cursor-pointer hover:bg-gray-100 w-[150px]">
-                  <div className="flex items-center gap-1">Date <ArrowUpDown className="h-3 w-3" /></div>
+              <TableHead onClick={() => handleSort('date_he')} className="cursor-pointer hover:bg-gray-100 w-[130px]">
+                  <div className="flex items-center gap-1">Hebrew Date <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead className="w-[200px] text-right" dir="rtl">Rabbi Name</TableHead>
+              <TableHead onClick={() => handleSort('date_en')} className="cursor-pointer hover:bg-gray-100 w-[130px]">
+                  <div className="flex items-center gap-1">English Date <ArrowUpDown className="h-3 w-3" /></div>
+              </TableHead>
+              <TableHead className="w-[150px] text-right" dir="rtl">Rabbi (HE)</TableHead>
+              <TableHead className="w-[150px]">Rabbi (EN)</TableHead>
               <TableHead onClick={() => handleSort('title_en')} className="cursor-pointer hover:bg-gray-100 w-[25%]">
                   <div className="flex items-center gap-1">Title (EN) <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
@@ -183,22 +183,28 @@ export default function AdminDashboard() {
           <TableBody>
             {loading ? (
                 <TableRow>
-                    <TableCell colSpan={5} className="h-48 text-center">
+                    <TableCell colSpan={8} className="h-48 text-center">
                         <div className="flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
                     </TableCell>
                 </TableRow>
             ) : stories.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-gray-500">No stories found.</TableCell>
+                    <TableCell colSpan={8} className="h-32 text-center text-gray-500">No stories found.</TableCell>
                 </TableRow>
             ) : (
                 stories.map((story) => (
-                <TableRow key={story.id} className="hover:bg-blue-50/30">
-                    <TableCell className="font-mono text-xs">{story.external_id}</TableCell>
-                    <TableCell className="font-medium">{story.hebrew_day} {story.hebrew_month}</TableCell>
+                <TableRow key={story.story_id} className="hover:bg-blue-50/30">
+                    <TableCell className="font-mono text-xs">{story.story_id}</TableCell>
+                    <TableCell className="font-serif text-lg" dir="rtl">{story.date_he}</TableCell>
+                    <TableCell className="font-medium">{story.date_en}</TableCell>
                     <TableCell className="text-right font-serif text-lg" dir="rtl">
                         <div className="max-w-[200px] truncate ml-auto">
-                            {story.rabbi_name || <span className="text-gray-400 text-sm">—</span>}
+                            {story.rabbi_he || <span className="text-gray-400 text-sm">—</span>}
+                        </div>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                        <div className="max-w-[200px] truncate">
+                            {story.rabbi_en || <span className="text-gray-400 text-sm">—</span>}
                         </div>
                     </TableCell>
                     <TableCell>
