@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown, Users } from "lucide-react";
+import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown, Users, Trash2 } from "lucide-react";
 import EditStoryModal from "../../features/stories/components/EditStoryModal";
 import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal";
 import BulkEditRabbiModal from "../../features/stories/components/BulkEditRabbiModal"; 
@@ -78,11 +78,32 @@ export default function AdminDashboard() {
         .from("stories")
         .select("*", { count: 'exact' });
 
-      // FIX: Scope Search (Body included)
+      // SMART SEARCH LOGIC
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
-        // Syntax for searching multiple columns in Supabase  
-        query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+        
+        // 1. EXACT ID MATCH: If pattern is AdXXXX or Ad1-XXXX, search ONLY story_id
+        const idPattern = /^Ad\d+-?\d*$/i;
+        if (idPattern.test(term)) {
+          // Normalize to uppercase to match database format (Ad0001)
+          const normalizedId = term.charAt(0).toUpperCase() + term.charAt(1).toLowerCase() + term.slice(2);
+          // Exact match in story_id column only
+          query = query.eq('story_id', normalizedId);
+        } 
+        // 2. MULTI-WORD SEARCH: Use AND logic (all words must be present)
+        else if (term.includes(' ')) {
+          const words = term.split(/\s+/).filter(w => w.length > 0);
+          
+          // For AND logic with Supabase, we need to chain .or() calls
+          // Each word must appear in at least one column
+          words.forEach(word => {
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
+          });
+        }
+        // 3. SINGLE WORD: Search across all columns (OR logic)
+        else {
+          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+        }
       }
 
       // FIX: Dynamic Sorting
@@ -108,18 +129,39 @@ export default function AdminDashboard() {
   }, [fetchStories]);
 
   // HANDLERS
-  const handleSort = (column: string) => {
-      if (sortCol === column) {
-          setSortAsc(!sortAsc); // Toggle
-      } else {
-          setSortCol(column);
-          setSortAsc(true); // Default asc for new col
-      }
+  const handleSearch = () => {
+    setPage(1); // Reset to page 1 when searching
+    fetchStories();
   };
 
-  const handleSearch = () => {
-    setPage(1); 
-    fetchStories();
+  const handleSort = (col: string) => {
+    if (col === sortCol) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortCol(col);
+      setSortAsc(true);
+    }
+  };
+
+  const handleDeleteStory = async (story: Story) => {
+    if (!confirm(`Are you sure you want to delete story ${story.story_id}?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('stories')
+        .delete()
+        .eq('story_id', story.story_id);
+
+      if (error) throw error;
+
+      // Show success and refresh
+      alert(`Story ${story.story_id} deleted successfully!`);
+      fetchStories();
+    } catch (error: any) {
+      alert(`Error deleting story: ${error.message}`);
+    }
   };
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -223,9 +265,14 @@ export default function AdminDashboard() {
                         </div>
                     </TableCell>
                     <TableCell className="text-center">
-                        <Button variant="ghost" size="icon" onClick={() => { setSelectedStory(story); setIsEditOpen(true); }}>
-                            <Pencil className="h-4 w-4 text-blue-600" />
-                        </Button>
+                        <div className="flex gap-1 justify-center">
+                            <Button variant="ghost" size="icon" onClick={() => { setSelectedStory(story); setIsEditOpen(true); }}>
+                                <Pencil className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteStory(story)}>
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                        </div>
                     </TableCell>
                 </TableRow>
                 ))
