@@ -163,6 +163,14 @@ function parseStoryBlock(block: string) {
             storyData.koteret = heTitle;  // Also save as koteret
             return;
         }
+
+        // NEW: Rabbi Extraction
+        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:|הרב:/i;
+        if (regexRabbi.test(cleanLine)) {
+            const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
+            storyData.rabbi_name = rabbi;
+            return;
+        }
         return; 
     } 
     
