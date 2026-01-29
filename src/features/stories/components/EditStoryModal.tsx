@@ -32,27 +32,33 @@ export default function EditStoryModal({
   const supabase = createSupabaseBrowserClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    rabbi_he: story?.rabbi_he || "",
+    rabbi_en: story?.rabbi_en || "",
+    date_he: story?.date_he || "",
+    date_en: story?.date_en || "",
     title_en: story?.title_en || "",
     title_he: story?.title_he || "",
     body_en: story?.body_en || "",
     body_he: story?.body_he || "",
-    tags: story?.tags || [],  // NEW: Tags field
+    tags: story?.tags || [],
   });
 
-  // When the story prop (specifically the ID) changes, update the form data
+  // When the story prop changes, update the form data
   useEffect(() => {
-    // Only update if the story is actually provided and its ID changes,
-    // or if the modal is opened with a new story
     if (story && (formData.title_en !== story.title_en || formData.title_he !== story.title_he)) {
       setFormData({
+        rabbi_he: story.rabbi_he || "",
+        rabbi_en: story.rabbi_en || "",
+        date_he: story.date_he || "",
+        date_en: story.date_en || "",
         title_en: story.title_en || "",
         title_he: story.title_he || "",
         body_en: story.body_en || "",
         body_he: story.body_he || "",
-        tags: story.tags || [],  // NEW: Tags field
+        tags: story.tags || [],
       });
     }
-  }, [story?.story_id]); // Depend on story.story_id to re-initialize for different stories
+  }, [story?.story_id]);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -65,11 +71,15 @@ export default function EditStoryModal({
     const { error } = await supabase
       .from("stories")
       .update({
+        rabbi_he: formData.rabbi_he,
+        rabbi_en: formData.rabbi_en,
+        date_he: formData.date_he,
+        date_en: formData.date_en,
         title_en: formData.title_en,
         title_he: formData.title_he,
         body_en: formData.body_en,
         body_he: formData.body_he,
-        tags: formData.tags,  // NEW: Save tags
+        tags: formData.tags,
       })
       .eq("story_id", story.story_id);
 
@@ -90,71 +100,118 @@ export default function EditStoryModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Story: {story.story_id}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-6 py-4">
-          {/* English Column */}
-          <div className="space-y-4">
-            <h3 className="border-b pb-2 font-bold">English</h3>
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input
-                value={formData.title_en}
-                onChange={(e) => handleChange("title_en", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Body</Label>
-              <Textarea
-                className="min-h-[300px]"
-                value={formData.body_en}
-                onChange={(e) => handleChange("body_en", e.target.value)}
-              />
+        <div className="space-y-6 py-4">
+          {/* Metadata Section - Full Width */}
+          <div className="border-b pb-4">
+            <h3 className="mb-3 font-bold text-lg">Metadata</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Dates */}
+              <div className="space-y-2">
+                <Label>Hebrew Date (e.g., א' אדר)</Label>
+                <Input
+                  value={formData.date_he}
+                  onChange={(e) => handleChange("date_he", e.target.value)}
+                  placeholder="א' אדר"
+                  dir="rtl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>English Date (e.g., 1 Adar)</Label>
+                <Input
+                  value={formData.date_en}
+                  onChange={(e) => handleChange("date_en", e.target.value)}
+                  placeholder="1 Adar"
+                />
+              </div>
+              
+              {/* Rabbi Names */}
+              <div className="space-y-2">
+                <Label>Rabbi Name (Hebrew)</Label>
+                <Input
+                  value={formData.rabbi_he}
+                  onChange={(e) => handleChange("rabbi_he", e.target.value)}
+                  placeholder="רבי שלמה בן מסעוד"
+                  dir="rtl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rabbi Name (English)</Label>
+                <Input
+                  value={formData.rabbi_en}
+                  onChange={(e) => handleChange("rabbi_en", e.target.value)}
+                  placeholder="Rabbi Shlomo ben Masud"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Hebrew Column */}
-          <div className="space-y-4" dir="rtl">
-            <h3 className="border-b pb-2 font-bold">עברית (Hebrew)</h3>
-            <div className="space-y-2">
-              <Label>כותרת (Title)</Label>
-              <Input
-                value={formData.title_he}
-                onChange={(e) => handleChange("title_he", e.target.value)}
-              />
+          {/* Content Section - Two Columns */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* English Column */}
+            <div className="space-y-4">
+              <h3 className="border-b pb-2 font-bold">English</h3>
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input
+                  value={formData.title_en}
+                  onChange={(e) => handleChange("title_en", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Body</Label>
+                <Textarea
+                  className="min-h-[250px]"
+                  value={formData.body_en}
+                  onChange={(e) => handleChange("body_en", e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>תוכן (Body)</Label>
-              <Textarea
-                className="min-h-[300px]"
-                value={formData.body_he}
-                onChange={(e) => handleChange("body_he", e.target.value)}
-              />
+
+            {/* Hebrew Column */}
+            <div className="space-y-4" dir="rtl">
+              <h3 className="border-b pb-2 font-bold">עברית (Hebrew)</h3>
+              <div className="space-y-2">
+                <Label>כותרת (Title)</Label>
+                <Input
+                  value={formData.title_he}
+                  onChange={(e) => handleChange("title_he", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>תוכן (Body)</Label>
+                <Textarea
+                  className="min-h-[250px]"
+                  value={formData.body_he}
+                  onChange={(e) => handleChange("body_he", e.target.value)}
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Tags Section - Full Width */}
-        <div className="space-y-2">
-          <Label>Tags / Metadata</Label>
-          <Textarea
-            className="min-h-[60px]" 
-            placeholder="Enter tags separated by commas (e.g., BIOGRAPHY, Pesach, Education)"
-            value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
-            onChange={(e) => {
-              const tagsArray = e.target.value
-                .split(',')
-                .map(t => t.trim())
-                .filter(t => t.length > 0);
-              setFormData((prev) => ({ ...prev, tags: tagsArray }));
-            }}
-          />
-          <p className="text-xs text-gray-500">
-            Internal organization tags (extracted from ### markers in source files)
-          </p>
+          {/* Tags Section - Full Width */}
+          <div className="space-y-2 border-t pt-4">
+            <Label>Tags / Metadata</Label>
+            <Textarea
+              className="min-h-[60px]" 
+              placeholder="Enter tags separated by commas (e.g., BIOGRAPHY, Pesach, Education)"
+              value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
+              onChange={(e) => {
+                const tagsArray = e.target.value
+                  .split(',')
+                  .map(t => t.trim())
+                  .filter(t => t.length > 0);
+                setFormData((prev) => ({ ...prev, tags: tagsArray }));
+              }}
+            />
+            <p className="text-xs text-gray-500">
+              Internal organization tags (extracted from ### markers in source files)
+            </p>
+          </div>
         </div>
 
         <DialogFooter>

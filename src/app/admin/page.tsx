@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown } from "lucide-react";
+import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown, Users } from "lucide-react";
 import EditStoryModal from "../../features/stories/components/EditStoryModal";
-import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal"; 
+import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal";
+import BulkEditRabbiModal from "../../features/stories/components/BulkEditRabbiModal"; 
 
 // TYPES - Matching NEW database schema
 export type Story = {
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
 
   // CHECK AUTH
   useEffect(() => {
@@ -134,6 +136,9 @@ export default function AdminDashboard() {
         <div className="flex gap-3">
            <Button variant="outline" onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}>
             <LogOut className="mr-2 h-4 w-4" /> Logout
+          </Button>
+          <Button variant="outline" onClick={() => setIsBulkEditOpen(true)} className="border-purple-200 text-purple-700 hover:bg-purple-50">
+            <Users className="mr-2 h-4 w-4" /> Bulk Edit Rabbis
           </Button>
           <Button onClick={() => setIsUploadOpen(true)} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" /> Upload Batch
@@ -247,6 +252,11 @@ export default function AdminDashboard() {
       <UploadBatchModal 
         isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} 
         onSuccess={fetchStories} 
+      />
+      <BulkEditRabbiModal
+        isOpen={isBulkEditOpen}
+        onClose={() => setIsBulkEditOpen(false)}
+        onSuccess={fetchStories}
       />
     </div>
   );

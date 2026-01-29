@@ -1,0 +1,243 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
+import { Loader2, Search, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+
+interface BulkEditRabbiModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export default function BulkEditRabbiModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: BulkEditRabbiModalProps) {
+  const supabase = createSupabaseBrowserClient();
+  const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  
+  // Search and Replace values
+  const [searchHe, setSearchHe] = useState("");
+  const [replaceHe, setReplaceHe] = useState("");
+  const [searchEn, setSearchEn] = useState("");
+  const [replaceEn, setReplaceEn] = useState("");
+  
+  // Preview
+  const [matchCount, setMatchCount] = useState<number | null>(null);
+
+  const handlePreview = async () => {
+    if (!searchHe && !searchEn) {
+      toast.error("Please enter at least one search term");
+      return;
+    }
+
+    setSearchLoading(true);
+    setMatchCount(null);
+
+    try {
+      let query = supabase.from("stories").select("story_id", { count: "exact", head: false });
+
+      if (searchHe) {
+        query = query.eq("rabbi_he", searchHe);
+      }
+      if (searchEn) {
+        query = query.eq("rabbi_en", searchEn);
+      }
+
+      const { data, count, error } = await query;
+
+      if (error) throw error;
+
+      setMatchCount(count || 0);
+      
+      if (count === 0) {
+        toast.info("No matching stories found");
+      } else {
+        toast.success(`Found ${count} matching stories`);
+      }
+    } catch (error: any) {
+      toast.error("Error searching stories", {
+        description: error.message,
+      });
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleBulkReplace = async () => {
+    if (matchCount === null || matchCount === 0) {
+      toast.error("Please preview changes first");
+      return;
+    }
+
+    if (!replaceHe && !replaceEn) {
+      toast.error("Please enter at least one replacement value");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // First, get all matching story IDs
+      let query = supabase.from("stories").select("story_id");
+      
+      if (searchHe) {
+        query = query.eq("rabbi_he", searchHe);
+      }
+      if (searchEn) {
+        query = query.eq("rabbi_en", searchEn);
+      }
+
+      const { data: stories, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
+      if (!stories || stories.length === 0) {
+        toast.error("No stories found to update");
+        setLoading(false);
+        return;
+      }
+
+      // Build update object
+      const updateData: any = {};
+      if (replaceHe) updateData.rabbi_he = replaceHe;
+      if (replaceEn) updateData.rabbi_en = replaceEn;
+
+      // Update all matching stories
+      const { error: updateError } = await supabase
+        .from("stories")
+        .update(updateData)
+        .in("story_id", stories.map(s => s.story_id));
+
+      if (updateError) throw updateError;
+
+      toast.success(`Successfully updated ${stories.length} stories!`);
+      onSuccess();
+      onClose();
+      
+      // Reset form
+      setSearchHe("");
+      setReplaceHe("");
+      setSearchEn("");
+      setReplaceEn("");
+      setMatchCount(null);
+    } catch (error: any) {
+      toast.error("Error updating stories", {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk Edit Rabbi Names</DialogTitle>
+          <DialogDescription>
+            Search for stories with a specific rabbi name and replace it across all matching stories.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-6 py-4">
+          {/* Search Section */}
+          <div className="space-y-4">
+            <h4 className="font-semibold text-sm">Find Stories With:</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Rabbi Name (Hebrew)</Label>
+                <Input
+                  value={searchHe}
+                  onChange={(e) => setSearchHe(e.target.value)}
+                  placeholder="רבי שלמה בן מסעוד"
+                  dir="rtl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Rabbi Name (English)</Label>
+                <Input
+                  value={searchEn}
+                  onChange={(e) => setSearchEn(e.target.value)}
+                  placeholder="Rabbi Shlomo ben Masud"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Replace Section */}
+          <div className="space-y-4 border-t pt-4">
+            <h4 className="font-semibold text-sm">Replace With:</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>New Rabbi Name (Hebrew)</Label>
+                <Input
+                  value={replaceHe}
+                  onChange={(e) => setReplaceHe(e.target.value)}
+                  placeholder="רבי יעקב אבוחצירא"
+                  dir="rtl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>New Rabbi Name (English)</Label>
+                <Input
+                  value={replaceEn}
+                  onChange={(e) => setReplaceEn(e.target.value)}
+                  placeholder="Rabbi Yaakov Abuchatzeira"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Preview Button */}
+          <div className="flex items-center gap-4 border-t pt-4">
+            <Button
+              variant="outline"
+              onClick={handlePreview}
+              disabled={searchLoading || loading}
+              className="flex-1"
+            >
+              {searchLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {searchLoading ? "Searching..." : <><Search className="mr-2 h-4 w-4" /> Preview Changes</>}
+            </Button>
+            
+            {matchCount !== null && (
+              <div className="flex-1 text-center p-3 bg-blue-50 rounded-md border border-blue-200">
+                <p className="text-sm font-semibold text-blue-900">
+                  {matchCount} {matchCount === 1 ? "story" : "stories"} will be updated
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleBulkReplace}
+            disabled={loading || matchCount === null || matchCount === 0}
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading ? "Updating..." : <><RefreshCw className="mr-2 h-4 w-4" /> Apply Changes</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
