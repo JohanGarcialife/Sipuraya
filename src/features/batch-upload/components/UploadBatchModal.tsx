@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UploadCloud, Loader2 } from "lucide-react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
 
 interface UploadBatchModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export default function UploadBatchModal({
   onClose,
   onSuccess,
 }: UploadBatchModalProps) {
+  const supabase = createSupabaseBrowserClient();
   const [fileEn, setFileEn] = useState<File | null>(null);
   const [fileHe, setFileHe] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,16 +38,47 @@ export default function UploadBatchModal({
     }
 
     setLoading(true);
-    setStatus("Processing... This may take a minute.");
-
-    const formData = new FormData();
-    formData.append("fileEn", fileEn);
-    formData.append("fileHe", fileHe);
+    setStatus("Uploading files to storage...");
 
     try {
+      // 1. Upload English File
+      const extEn = fileEn.name.split('.').pop();
+      const pathEn = `upload_${Date.now()}_en.${extEn}`;
+      const { error: uploadErrorEn } = await supabase.storage
+        .from('ingest')
+        .upload(pathEn, fileEn);
+
+      if (uploadErrorEn) throw new Error(`English file upload failed: ${uploadErrorEn.message}. (Does 'ingest' bucket exist?)`);
+
+      // 2. Upload Hebrew File
+      const extHe = fileHe.name.split('.').pop();
+      const pathHe = `upload_${Date.now()}_he.${extHe}`;
+      const { error: uploadErrorHe } = await supabase.storage
+        .from('ingest')
+        .upload(pathHe, fileHe);
+
+      if (uploadErrorHe) throw new Error(`Hebrew file upload failed: ${uploadErrorHe.message}`);
+
+      setStatus("Files uploaded. Generating access links...");
+
+      // 3. Get Signed URLs
+      const { data: signedEn } = await supabase.storage.from('ingest').createSignedUrl(pathEn, 300); // 5 mins
+      const { data: signedHe } = await supabase.storage.from('ingest').createSignedUrl(pathHe, 300);
+
+      if (!signedEn?.signedUrl || !signedHe?.signedUrl) throw new Error("Failed to generate signed URLs");
+
+      setStatus("Processing files... This may take a minute.");
+
+      // 4. Send URLs to API
       const res = await fetch("/api/ingest", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            urlEn: signedEn.signedUrl, 
+            urlHe: signedHe.signedUrl,
+            nameEn: fileEn.name, // Pass original names for extraction logic
+            nameHe: fileHe.name
+        }),
       });
 
       const data = await res.json();
