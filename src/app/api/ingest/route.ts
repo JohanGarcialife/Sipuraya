@@ -5,6 +5,15 @@ import mammoth from "mammoth";
 import pdf from "pdf-parse"; // Revert to default import matching zipper.js behavior
 
 // CONFIGURATION
+export const maxDuration = 60; // 60 seconds (Hobby/Pro limit)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
@@ -65,6 +74,24 @@ function smartFindId(line: string) {
         return `${match[2]}${match[1]}`;
     }
     return null;
+}
+
+// Regex to fix detached Hebrew Nikkud (Combining Diacritics)
+// If there is a space before a Nikkud, it detaches from the letter.
+// We remove the space so it attaches to the previous letter.
+// Range: \u0591-\u05C7 (Cantillation & Vowels)
+function repairHebrewText(text: string) {
+    if (!text) return text;
+    // Normalize unicode first (NFC)
+    let repaired = text.normalize('NFC');
+    
+    // Remove space between any character and a Hebrew vowel/mark
+    repaired = repaired.replace(/\s+([\u0591-\u05C7])/g, '$1');
+    
+    // Remove the "dotted circle" placeholder if present (U+25CC)
+    repaired = repaired.replace(/\u25CC/g, '');
+    
+    return repaired;
 }
 
 // Extract English rabbi name from story content
@@ -314,7 +341,7 @@ function parseHebrewStory(story: any) {
   
   return {
     id: story.id,
-    body: body,
+    body: repairHebrewText(body), // Normalize and Fix Nikkud
     tags: tags,
     rabbi_name: rabbi_name
   };
@@ -435,19 +462,39 @@ export async function POST(req: NextRequest) {
     const finalArray = Array.from(storiesMap.values());
     let processedCount = 0;
 
-    for (const story of finalArray) {
-        // @ts-ignore
-        const textForAI = story.body_he || story.body_en;
-        console.log(`[Ingest] Generating embedding for ID: ${story.story_id}`);
-        const embedding = await generateEmbedding(textForAI);
+    const finalArray = Array.from(storiesMap.values());
+    let processedCount = 0;
+    
+    // OPTIMIZATION: Process in parallel chunks to avoid timeouts
+    // Verify embedding generation is skipped if text is null
+    const CONCURRENCY_LIMIT = 5;
+    
+    for (let i = 0; i < finalArray.length; i += CONCURRENCY_LIMIT) {
+        const chunk = finalArray.slice(i, i + CONCURRENCY_LIMIT);
+        
+        await Promise.all(chunk.map(async (story) => {
+             // @ts-ignore
+             const textForAI = story.body_he || story.body_en;
+             
+             // Ensure story has an ID before upserting
+             if (!story.story_id) return;
 
-        const { error } = await supabase.from('stories').upsert({
-            ...story,
-            embedding,
-            is_published: true
-        }, { onConflict: 'story_id' });
+             try {
+                console.log(`[Ingest] Generating embedding for ID: ${story.story_id}`);
+                const embedding = await generateEmbedding(textForAI);
+                
+                const { error } = await supabase.from('stories').upsert({
+                    ...story,
+                    embedding,
+                    is_published: true
+                }, { onConflict: 'story_id' });
 
-        if (!error) processedCount++;
+                if (!error) processedCount++;
+                else console.error(`[Ingest] DB Error for ${story.story_id}:`, error.message);
+             } catch (err: any) {
+                 console.error(`[Ingest] Processing Error for ${story.story_id}:`, err.message);
+             }
+        }));
     }
 
     return NextResponse.json({ 
