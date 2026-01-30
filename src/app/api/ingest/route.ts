@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+import pdf from "pdf-parse"; // Revert to default import matching zipper.js behavior
 
 // CONFIGURATION
 const supabase = createClient(
@@ -55,28 +55,55 @@ function cleanId(id: string) {
 }
 
 function smartFindId(line: string) {
-    let match = line.match(/(Ad\d+)/i);
+    // Generalize to find any ID format like Ad0001, Ni0001, Pe0001
+    let match = line.match(/([A-Za-z]{2}\d+)/i);
     if (match) return match[1];
-    match = line.match(/(\d+Ad)/i); 
+    
+    // Handle reverse format 0001Ad -> Ad0001
+    match = line.match(/(\d+)([A-Za-z]{2})/i); 
     if (match) {
-        const numbers = match[1].replace(/Ad/i, '');
-        return `Ad${numbers}`;
+        return `${match[2]}${match[1]}`;
     }
     return null;
 }
 
+// Extract English rabbi name from story content
+function extractEnglishRabbiName(englishBody: string | null) {
+  if (!englishBody) return null;
+  
+  // Pattern 1: "Rabbi [Name]" at the beginning of the text
+  const pattern1 = /^Rabbi\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+[A-Z][a-z]+)?)/m;
+  const match1 = englishBody.match(pattern1);
+  if (match1) return `Rabbi ${match1[1]}`;
+  
+  // Pattern 2: Look for rabbi name in first few sentences
+  const firstPart = englishBody.substring(0, 500);
+  const pattern2 = /(?:the\s+)?(?:holy\s+)?Rabbi\s+([A-Z][a-z]+(?:\s+(?:ben\s+)?[A-Z][a-z]+)*)/i;
+  const match2 = firstPart.match(pattern2);
+  if (match2) return `Rabbi ${match2[1]}`;
+  
+  // Pattern 3: "R' [Name]" or "R. [Name]"
+  const pattern3 = /R['.\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/;
+  const match3 = firstPart.match(pattern3);
+  if (match3) return `Rabbi ${match3[1]}`;
+  
+  return null;
+}
+
 async function extractText(buffer: Buffer, fileType: string) {
   try {
+    console.log(`[ExtractText] Starting for fileType: ${fileType}, Buffer size: ${buffer.length}`);
     if (fileType.toLowerCase().endsWith(".pdf") || fileType === "application/pdf") {
-      const parser = new PDFParse({ data: buffer });
-      const data = await parser.getText();
+      const data = await pdf(buffer);
+      console.log(`[ExtractText] PDF parsed. Text length: ${data.text.length}`);
       return data.text.replace(/\n\n+/g, '\n');
     } else {
       const result = await mammoth.extractRawText({ buffer: buffer });
+      console.log(`[ExtractText] DOCX parsed. Text length: ${result.value.length}`);
       return result.value;
     }
   } catch (e: any) {
-    console.error("Error extracting text:", e.message);
+    console.error(`[ExtractText] Error extracting text from ${fileType}:`, e.message);
     return "";
   }
 }
@@ -118,7 +145,7 @@ function parseStoryBlock(block: string) {
     let cleanLine = line.trim();
     if (!cleanLine) return;
 
-    if (cleanLine.includes('Ad') || cleanLine.includes('Story ID')) {
+    if (cleanLine.includes('Story ID') || /([A-Za-z]{2}\d+)/.test(cleanLine)) {
         const foundId = smartFindId(cleanLine);
         if (foundId) {
             storyData.id = cleanId(foundId);
@@ -204,8 +231,93 @@ function parseStoryBlock(block: string) {
   });
 
   storyData.body = bodyBuffer.join('\n').trim();
-  storyData.tags = tagsBuffer;  // NEW: Include extracted tags
+  storyData.tags = tagsBuffer; // NEW: Include extracted tags
   return storyData;
+}
+
+// --- SPECIAL SPLIT FOR HEBREW FILES (Ported from zipper.js) ---
+function splitHebrewStories(text: string) {
+  const stories: any[] = [];
+  
+  // Split by the Hebrew ID tag pattern (Generalized for Ad, Ni, etc.)
+  const regex = /#סיפור_מספר:\s*([A-Za-z]{2}\d+)/gi;
+  const matches = [];
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    matches.push({
+      id: match[1],
+      position: match.index,
+      fullMatch: match[0]
+    });
+  }
+  
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].position;
+    const end = i < matches.length - 1 ? matches[i + 1].position : text.length;
+    const content = text.substring(start, end);
+    
+    stories.push({
+      id: cleanId(matches[i].id),
+      content: content
+    });
+  }
+  
+  return stories;
+}
+
+// --- PARSE HEBREW STORY CONTENT (Ported from zipper.js) ---
+function parseHebrewStory(story: any) {
+  let content = story.content;
+  const tags: string[] = [];
+  let rabbi_name = null;
+  
+  // Remove the ID tag at the beginning (Generalized)
+  content = content.replace(/#סיפור_מספר:\s*[A-Za-z]{2}\d+/i, '');
+  
+  // Remove ###NEW STORY
+  content = content.replace(/###NEW STORY/gi, '');
+  
+  // EXTRACT RABBI NAME
+  const rabbiMatch = content.match(/###([^#]+)###/);
+  if (rabbiMatch) {
+    rabbi_name = rabbiMatch[1].trim();
+  }
+  
+  // Tags extraction
+  const tagPattern = /###([^#\n]+)###/g;
+  let match;
+  while ((match = tagPattern.exec(content)) !== null) {
+    const tag = match[1].trim();
+    if (tag && 
+        tag !== 'NEW STORY' &&
+        !tag.match(/^English Translation/i) &&
+        !tag.match(/^Hebrew Translation/i) &&
+        tag !== rabbi_name) {
+      tags.push(tag);
+    }
+  }
+  
+  // Cleaning
+  content = content.replace(/###[^#]+###/g, '');
+  content = content.replace(/###NEW STORY/gi, '');
+  content = content.replace(/###[^\u05d0-\u05ea]*([א-ת'])/g, '$1');
+  content = content.replace(/NEW STORY/gi, '');
+  content = content.replace(/###/g, '');
+  
+  content = content.trim();
+  const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+  const dateMarkerPattern = new RegExp(`^[א-ת]+['"׳״][א-ת]*\\s*(${hebrewMonths})`, 'i');
+  content = content.replace(dateMarkerPattern, '');
+    
+  const body = content.replace(/\s+/g, ' ').trim();
+  
+  return {
+    id: story.id,
+    body: body,
+    tags: tags,
+    rabbi_name: rabbi_name
+  };
 }
 
 async function generateEmbedding(text: string) {
@@ -248,14 +360,28 @@ export async function POST(req: NextRequest) {
     const textEn = await extractText(bufferEn, fileEn.name);
     const textHe = await extractText(bufferHe, fileHe.name);
 
+    console.log(`[Ingest] TEXT PREVIEW EN: ${textEn.substring(0, 200)}`);
+    console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);
+
     const splitRegex = /###\s*NEW\s*STORY/i;
     const rawStoriesEn = textEn.split(splitRegex);
-    const rawStoriesHe = textHe.split(splitRegex);
+    
+    // Process Hebrew (special split by ID tag logic from zipper.js)
+    const rawStoriesHe = splitHebrewStories(textHe);
+
+    console.log(`[Ingest] Split Counts - EN: ${rawStoriesEn.length}, HE: ${rawStoriesHe.length}`);
 
     const storiesMap = new Map();
 
-    rawStoriesEn.forEach(block => {
+    rawStoriesEn.forEach((block, index) => {
       const data = parseStoryBlock(block);
+      
+      // DEBUG: Log first story failure details
+      if (index === 0 && !data.id) {
+          console.log(`[Ingest] DEBUG: First story failed to produce ID.`);
+          console.log(`[Ingest] DEBUG: First 5 lines of block:\n${block.split('\n').slice(0, 5).join('\n')}`);
+      }
+      
       if (data.id) {
         const day = data.day || 1;
         const month = data.month || 'Adar';
@@ -275,26 +401,36 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    console.log(`[Ingest] English stories mapped: ${storiesMap.size}`);
+
     let matchCount = 0;
-    rawStoriesHe.forEach(block => {
-      const data = parseStoryBlock(block);
+    rawStoriesHe.forEach(heStory => {
+      // Use specialized Hebrew parser
+      const data = parseHebrewStory(heStory);
       if (data.id && storiesMap.has(data.id)) {
         const existing = storiesMap.get(data.id);
-        if (data.title_he) existing.title_he = data.title_he;
+        
+        // Update fields if present
         if (data.body && data.body.length > 2) existing.body_he = data.body;
-        else {
-             const rawClean = block.replace(/###.+/g, '').trim();
-             if(rawClean.length > 10) existing.body_he = rawClean;
-        }
-        // NEW: Extract rabbi_he from Hebrew content (from ### tags or body)
         if (data.rabbi_name) existing.rabbi_he = data.rabbi_name;
-        // Merge tags
+        
+        if (!existing.title_he && data.rabbi_name) {
+          existing.title_he = data.rabbi_name;
+        }
+
         if (data.tags && data.tags.length > 0) {
-          existing.tags = [...new Set([...existing.tags, ...data.tags])];
+          existing.tags = Array.from(new Set([...existing.tags, ...data.tags]));
         }
         matchCount++;
       }
     });
+
+    console.log(`[Ingest] Merged HE stories. Match Count: ${matchCount}`);
+    
+    // Populate English Rabbi Names (Post-process)
+    for (const [id, story] of storiesMap.entries()) {
+        story.rabbi_en = extractEnglishRabbiName(story.body_en);
+    }
 
     const finalArray = Array.from(storiesMap.values());
     let processedCount = 0;
@@ -302,6 +438,7 @@ export async function POST(req: NextRequest) {
     for (const story of finalArray) {
         // @ts-ignore
         const textForAI = story.body_he || story.body_en;
+        console.log(`[Ingest] Generating embedding for ID: ${story.story_id}`);
         const embedding = await generateEmbedding(textForAI);
 
         const { error } = await supabase.from('stories').upsert({
@@ -315,7 +452,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Processed ${processedCount} stories. Matches: ${matchCount}` 
+      message: `Processed ${processedCount} stories. Matches: ${matchCount}`,
+      debug: {
+        storiesEnFound: rawStoriesEn.length,
+        storiesHeFound: rawStoriesHe.length,
+        sampleTextEn: textEn.substring(0, 500),
+        sampleTextHe: textHe.substring(0, 500)
+      }
     });
 
   } catch (error: any) {
