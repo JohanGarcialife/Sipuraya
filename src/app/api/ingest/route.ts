@@ -6,13 +6,7 @@ import pdf from "pdf-parse"; // Revert to default import matching zipper.js beha
 
 // CONFIGURATION
 export const maxDuration = 60; // 60 seconds (Hobby/Pro limit)
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
+
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -459,8 +453,6 @@ export async function POST(req: NextRequest) {
         story.rabbi_en = extractEnglishRabbiName(story.body_en);
     }
 
-    const finalArray = Array.from(storiesMap.values());
-    let processedCount = 0;
 
     const finalArray = Array.from(storiesMap.values());
     let processedCount = 0;
