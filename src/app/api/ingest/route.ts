@@ -2,7 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+// POLYFILLS: Fix pdf-parse/pdfjs-dist dependencies in Node.js
+if (typeof Promise.withResolvers === "undefined") {
+  // @ts-ignore
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
+if (typeof (global as any).DOMMatrix === "undefined") {
+  const DOMMatrixMock = class DOMMatrix {
+    constructor() { (this as any).a = 1; (this as any).b = 0; (this as any).c = 0; (this as any).d = 1; (this as any).e = 0; (this as any).f = 0; }
+    toString() { return "matrix(1, 0, 0, 1, 0, 0)"; }
+  };
+  (global as any).DOMMatrix = DOMMatrixMock;
+}
+
+const { PDFParse } = require("pdf-parse");
+
 
 // CONFIGURATION
 const supabase = createClient(
@@ -70,6 +92,10 @@ async function extractText(buffer: Buffer, fileType: string) {
     if (fileType.toLowerCase().endsWith(".pdf") || fileType === "application/pdf") {
       const parser = new PDFParse({ data: buffer });
       const data = await parser.getText();
+      await parser.destroy(); // CLEANUP IS CRITICAL
+      
+      console.log(`📄 PDF Extracted: ${data.text.length} chars`);
+      console.log(`📄 PDF Preview: ${data.text.substring(0, 500)}...`);
       return data.text.replace(/\n\n+/g, '\n');
     } else {
       const result = await mammoth.extractRawText({ buffer: buffer });
@@ -77,7 +103,8 @@ async function extractText(buffer: Buffer, fileType: string) {
     }
   } catch (e: any) {
     console.error("Error extracting text:", e.message);
-    return "";
+    if (e.stack) console.error(e.stack);
+    return `ERROR_EXTRACTING_TEXT: ${e.message}`;
   }
 }
 
@@ -234,10 +261,43 @@ async function generateEmbedding(text: string) {
   }
 }
 
+// NEW: Fallback function to use OpenAI for story extraction/repair if regex fails
+async function repairTextWithOpenAI(text: string, language: 'English' | 'Hebrew') {
+    try {
+        console.log(`🤖 OpenAI Repairing ${language} text (length: ${text.length})...`);
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini", // Fast and capable model
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a helpful assistant that formats text into structured stories. 
+                    The input text contains multiple daily stories but might lack proper separators using "###" tags.
+                    Your task:
+                    1. Identify distinct stories based on dates (e.g. "1 Nissan", "Nissan 1", "א' ניסן") or titles.
+                    2. Insert the separator "### NEW STORY" before each story.
+                    3. Ensure each story has metadata tags: "### Date:", "### Title:", "### Rabbi:" where possible.
+                    4. Return the fully formatted text. Do not summarize, keep original content.`
+                },
+                {
+                    role: "user",
+                    content: `Please format this text:\n\n${text.substring(0, 30000)}` // Limit to avoid token limits if massive
+                }
+            ],
+            temperature: 0.1
+        });
+        return response.choices[0].message.content || text;
+    } catch (e) {
+        console.error("❌ OpenAI Repair Failed:", e);
+        return text;
+    }
+}
+
 export async function POST(req: NextRequest) {
+  console.log("🔵 API INGEST: Started");
   try {
     // REFACTOR: Read from JSON body (URLs) instead of FormData to bypass body size limits
     const body = await req.json();
+    console.log("🔵 API INGEST: Body received", Object.keys(body));
     const { urlEn, urlHe, nameEn, nameHe } = body;
 
     if (!urlEn || !urlHe) return NextResponse.json({ error: "Missing file URLs" }, { status: 400 });
@@ -247,19 +307,38 @@ export async function POST(req: NextRequest) {
     // Download files from Signed URLs
     const [resEn, resHe] = await Promise.all([fetch(urlEn), fetch(urlHe)]);
 
-    if (!resEn.ok || !resHe.ok) throw new Error("Failed to download files from storage");
+    if (!resEn.ok || !resHe.ok) {
+        console.error("❌ Failed to download files", resEn.status, resHe.status);
+        throw new Error("Failed to download files from storage");
+    }
 
     const bufferEn = Buffer.from(await resEn.arrayBuffer());
     const bufferHe = Buffer.from(await resHe.arrayBuffer());
+    console.log(`✅ Files downloaded. Sizes: En=${bufferEn.length}, He=${bufferHe.length}`);
 
-    console.log(`✅ Files downloaded. Extracting text...`);
-
+    console.log("🔍 Extracting text...");
     const textEn = await extractText(bufferEn, nameEn || "file.docx");
     const textHe = await extractText(bufferHe, nameHe || "file.docx");
+    console.log(`✅ Text extracted. Lengths: En=${textEn.length}, He=${textHe.length}`);
 
     const splitRegex = /###\s*NEW\s*STORY/i;
-    const rawStoriesEn = textEn.split(splitRegex);
-    const rawStoriesHe = textHe.split(splitRegex);
+    let rawStoriesEn = textEn.split(splitRegex);
+    let rawStoriesHe = textHe.split(splitRegex);
+
+    // FALLBACK: If 0 or 1 valid story found (but text exists), try OpenAI repair
+    if (rawStoriesEn.length <= 1 && textEn.length > 500) {
+        console.warn("⚠️ No English stories found by regex. Attempting OpenAI Repair...");
+        const repairedEn = await repairTextWithOpenAI(textEn, 'English');
+        rawStoriesEn = repairedEn.split(splitRegex);
+    }
+    if (rawStoriesHe.length <= 1 && textHe.length > 500) {
+        console.warn("⚠️ No Hebrew stories found by regex. Attempting OpenAI Repair...");
+        // Hebrew might be tricky with encoding, but let's try
+        const repairedHe = await repairTextWithOpenAI(textHe, 'Hebrew');
+        rawStoriesHe = repairedHe.split(splitRegex);
+    }
+
+    console.log(`📊 Stories found: En=${rawStoriesEn.length}, He=${rawStoriesHe.length}`);
 
     const storiesMap = new Map();
 
@@ -336,7 +415,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Processed ${processedCount} stories. Matches: ${matchCount}` 
+      message: `Processed ${processedCount} stories. Matches: ${matchCount}`,
+      debug: {
+        textEnLength: textEn.length,
+        textHeLength: textHe.length,
+        storiesEnFound: rawStoriesEn.length,
+        storiesHeFound: rawStoriesHe.length,
+        previewEn: textEn.substring(0, 200),
+        previewHe: textHe.substring(0, 200)
+      }
     });
 
   } catch (error: any) {

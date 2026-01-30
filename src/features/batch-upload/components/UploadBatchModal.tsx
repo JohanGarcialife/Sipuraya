@@ -32,44 +32,63 @@ export default function UploadBatchModal({
   const [status, setStatus] = useState("");
 
   const handleUpload = async () => {
+    console.log("🚀 Starting upload process...");
     if (!fileEn || !fileHe) {
+      console.warn("⚠️ Files missing");
       setStatus("⚠️ Please select both files.");
       return;
     }
 
     setLoading(true);
     setStatus("Uploading files to storage...");
+    console.log("📂 Files selected:", fileEn.name, fileHe.name);
 
     try {
       // 1. Upload English File
       const extEn = fileEn.name.split('.').pop();
       const pathEn = `upload_${Date.now()}_en.${extEn}`;
-      const { error: uploadErrorEn } = await supabase.storage
+      console.log("⬆️ Uploading English file to:", pathEn);
+      
+      const { data: upEn, error: uploadErrorEn } = await supabase.storage
         .from('ingest')
         .upload(pathEn, fileEn);
 
-      if (uploadErrorEn) throw new Error(`English file upload failed: ${uploadErrorEn.message}. (Does 'ingest' bucket exist?)`);
+      if (uploadErrorEn) {
+        console.error("❌ English upload failed:", uploadErrorEn);
+        throw new Error(`English file upload failed: ${uploadErrorEn.message}. (Does 'ingest' bucket exist?)`);
+      }
+      console.log("✅ English upload success:", upEn);
 
       // 2. Upload Hebrew File
       const extHe = fileHe.name.split('.').pop();
       const pathHe = `upload_${Date.now()}_he.${extHe}`;
-      const { error: uploadErrorHe } = await supabase.storage
+      console.log("⬆️ Uploading Hebrew file to:", pathHe);
+
+      const { data: upHe, error: uploadErrorHe } = await supabase.storage
         .from('ingest')
         .upload(pathHe, fileHe);
 
-      if (uploadErrorHe) throw new Error(`Hebrew file upload failed: ${uploadErrorHe.message}`);
+      if (uploadErrorHe) {
+         console.error("❌ Hebrew upload failed:", uploadErrorHe);
+         throw new Error(`Hebrew file upload failed: ${uploadErrorHe.message}`);
+      }
+      console.log("✅ Hebrew upload success:", upHe);
 
       setStatus("Files uploaded. Generating access links...");
 
       // 3. Get Signed URLs
+      console.log("🔑 Generating signed URLs...");
       const { data: signedEn } = await supabase.storage.from('ingest').createSignedUrl(pathEn, 300); // 5 mins
       const { data: signedHe } = await supabase.storage.from('ingest').createSignedUrl(pathHe, 300);
+
+      console.log("🔗 URLs generated:", { urlEn: signedEn?.signedUrl, urlHe: signedHe?.signedUrl });
 
       if (!signedEn?.signedUrl || !signedHe?.signedUrl) throw new Error("Failed to generate signed URLs");
 
       setStatus("Processing files... This may take a minute.");
 
       // 4. Send URLs to API
+      console.log("📡 Sending to API...");
       const res = await fetch("/api/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,7 +100,9 @@ export default function UploadBatchModal({
         }),
       });
 
+      console.log("📡 API Response status:", res.status);
       const data = await res.json();
+      console.log("📡 API Response body:", data);
 
       if (res.ok) {
         setStatus(`✅ Success! ${data.message}`);
