@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
           date_he: formatHebrewDate(day, month),               // NEW: "א' אדר" format
           date_en: formatEnglishDate(day, month),              // NEW: "1 Adar" format  
           rabbi_he: null,                                      // NEW: Will be filled from Hebrew file
-          rabbi_en: null,                                      // NEW: Will extract from English content
+          rabbi_en: data.rabbi_name || null,                   // NEW: Extract from English content
           title_en: data.title_en,
           title_he: data.title_he || null,
           body_en: data.body,
@@ -296,21 +296,33 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // OPTIMIZED: Parallel processing with concurrency limit to avoid timeouts
+    const CONCURRENCY_LIMIT = 5;
     const finalArray = Array.from(storiesMap.values());
     let processedCount = 0;
+    
+    // Process in chunks
+    for (let i = 0; i < finalArray.length; i += CONCURRENCY_LIMIT) {
+        const chunk = finalArray.slice(i, i + CONCURRENCY_LIMIT);
+        
+        await Promise.all(chunk.map(async (story) => {
+            try {
+                // @ts-ignore
+                const textForAI = story.body_he || story.body_en;
+                // Generate embedding (parallelized)
+                const embedding = await generateEmbedding(textForAI);
 
-    for (const story of finalArray) {
-        // @ts-ignore
-        const textForAI = story.body_he || story.body_en;
-        const embedding = await generateEmbedding(textForAI);
-
-        const { error } = await supabase.from('stories').upsert({
-            ...story,
-            embedding,
-            is_published: true
-        }, { onConflict: 'story_id' });
-
-        if (!error) processedCount++;
+                const { error } = await supabase.from('stories').upsert({
+                    ...story,
+                    embedding,
+                    is_published: true
+                }, { onConflict: 'story_id' });
+                
+                if (!error) processedCount++;
+            } catch (err: any) {
+                console.error(`Error processing story ${story.story_id}:`, err.message);
+            }
+        }));
     }
 
     return NextResponse.json({ 
