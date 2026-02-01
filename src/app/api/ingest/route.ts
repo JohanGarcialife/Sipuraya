@@ -368,6 +368,7 @@ async function generateEmbedding(text: string) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
     // REFACTOR: Read from JSON body (URLs) instead of FormData to bypass body size limits
     const body = await req.json();
     console.log("🔵 API INGEST: Body received", Object.keys(body));
