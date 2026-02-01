@@ -79,8 +79,8 @@ function repairHebrewText(text: string) {
     // Normalize unicode first (NFC)
     let repaired = text.normalize('NFC');
     
-    // Remove space between any character and a Hebrew vowel/mark
-    repaired = repaired.replace(/\s+([\u0591-\u05C7])/g, '$1');
+    // Remove space (including non-breaking) between any character and a Hebrew vowel/mark
+    repaired = repaired.replace(/[\s\u00A0]+([\u0591-\u05C7])/g, '$1');
     
     // Remove the "dotted circle" placeholder if present (U+25CC)
     repaired = repaired.replace(/\u25CC/g, '');
@@ -368,18 +368,28 @@ async function generateEmbedding(text: string) {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const formData = await req.formData();
-    const fileEn = formData.get("fileEn") as File;
-    const fileHe = formData.get("fileHe") as File;
+    // REFACTOR: Read from JSON body (URLs) instead of FormData to bypass body size limits
+    const body = await req.json();
+    console.log("🔵 API INGEST: Body received", Object.keys(body));
+    const { urlEn, urlHe, nameEn, nameHe } = body;
 
-    if (!fileEn || !fileHe) return NextResponse.json({ error: "Missing files" }, { status: 400 });
+    if (!urlEn || !urlHe) return NextResponse.json({ error: "Missing file URLs" }, { status: 400 });
 
-    const bufferEn = Buffer.from(await fileEn.arrayBuffer());
-    const bufferHe = Buffer.from(await fileHe.arrayBuffer());
+    console.log(`📥 Downloading files from storage...`);
+    
+    // Download files from Signed URLs
+    const [resEn, resHe] = await Promise.all([fetch(urlEn), fetch(urlHe)]);
 
-    const textEn = await extractText(bufferEn, fileEn.name);
-    const textHe = await extractText(bufferHe, fileHe.name);
+    if (!resEn.ok || !resHe.ok) {
+        console.error("❌ Failed to download files", resEn.status, resHe.status);
+        throw new Error("Failed to download files from storage");
+    }
+
+    const bufferEn = Buffer.from(await resEn.arrayBuffer());
+    const bufferHe = Buffer.from(await resHe.arrayBuffer());
+
+    const textEn = await extractText(bufferEn, nameEn || "file.docx");
+    const textHe = await extractText(bufferHe, nameHe || "file.docx");
 
     console.log(`[Ingest] TEXT PREVIEW EN: ${textEn.substring(0, 200)}`);
     console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);
