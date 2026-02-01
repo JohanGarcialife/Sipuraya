@@ -101,7 +101,17 @@ export default function UploadBatchModal({
       });
 
       console.log("📡 API Response status:", res.status);
-      const data = await res.json();
+        if (text && text.includes("<!DOCTYPE html>")) {
+             throw new Error("Server Timeout (504): The files are too large or processing took too long.");
+        }
+        
+        try {
+            data = JSON.parse(text);
+        } catch (jsonError) {
+             console.error("Failed to parse API response:", text);
+             throw new Error(`Invalid Server Response: ${text.substring(0, 50)}...`);
+        }
+
       console.log("📡 API Response body:", data);
 
       if (res.ok) {
@@ -116,8 +126,9 @@ export default function UploadBatchModal({
       } else {
         setStatus(`❌ Error: ${data.error}`);
       }
-    } catch (e) {
-      setStatus("❌ Network error. Please try again.");
+    } catch (e: any) {
+      console.error("Upload/Ingest Error:", e);
+      setStatus(`❌ Error: ${e.message || "Unknown error occurred"}`);
     } finally {
       setLoading(false);
     }
