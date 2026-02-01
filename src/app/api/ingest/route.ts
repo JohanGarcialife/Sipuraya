@@ -423,7 +423,7 @@ export async function POST(req: NextRequest) {
           date_he: formatHebrewDate(day, month),               // NEW: "א' אדר" format
           date_en: formatEnglishDate(day, month),              // NEW: "1 Adar" format  
           rabbi_he: null,                                      // NEW: Will be filled from Hebrew file
-          rabbi_en: null,                                      // NEW: Will extract from English content
+          rabbi_en: data.rabbi_name,                          // FIX: Use extracted tag first
           title_en: data.title_en,
           title_he: data.title_he || null,
           body_en: data.body,
@@ -459,9 +459,11 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Ingest] Merged HE stories. Match Count: ${matchCount}`);
     
-    // Populate English Rabbi Names (Post-process)
+    // Populate English Rabbi Names (Post-process fallback)
     for (const [id, story] of storiesMap.entries()) {
-        story.rabbi_en = extractEnglishRabbiName(story.body_en);
+        if (!story.rabbi_en) {
+            story.rabbi_en = extractEnglishRabbiName(story.body_en);
+        }
     }
 
 
