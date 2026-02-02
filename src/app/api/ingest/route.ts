@@ -486,11 +486,25 @@ export async function POST(req: NextRequest) {
                 console.log(`[Ingest] Generating embedding for ID: ${story.story_id}`);
                 const embedding = await generateEmbedding(textForAI);
                 
-                const { error } = await supabase.from('stories').upsert({
-                    ...story,
+                // Build upsert payload SELECTIVELY to avoid overwriting good data with nulls
+                const upsertPayload: any = {
+                    story_id: story.story_id,
                     embedding,
                     is_published: true
-                }, { onConflict: 'story_id' });
+                };
+                
+                // Only include fields that have valid non-null values
+                if (story.date_he) upsertPayload.date_he = story.date_he;
+                if (story.date_en) upsertPayload.date_en = story.date_en;
+                if (story.title_en) upsertPayload.title_en = story.title_en;
+                if (story.title_he) upsertPayload.title_he = story.title_he;
+                if (story.body_en) upsertPayload.body_en = story.body_en;
+                if (story.body_he) upsertPayload.body_he = story.body_he;
+                if (story.rabbi_en) upsertPayload.rabbi_en = story.rabbi_en; // Only update if we have a value
+                if (story.rabbi_he) upsertPayload.rabbi_he = story.rabbi_he; // Only update if we have a value
+                if (story.tags && story.tags.length > 0) upsertPayload.tags = story.tags;
+                
+                const { error } = await supabase.from('stories').upsert(upsertPayload, { onConflict: 'story_id' });
 
                 if (!error) processedCount++;
                 else console.error(`[Ingest] DB Error for ${story.story_id}:`, error.message);
