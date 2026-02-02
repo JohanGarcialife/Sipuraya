@@ -101,6 +101,9 @@ export default function UploadBatchModal({
       });
 
       console.log("📡 API Response status:", res.status);
+      const text = await res.text();
+      let data;
+      
         if (text && text.includes("<!DOCTYPE html>")) {
              throw new Error("Server Timeout (504): The files are too large or processing took too long.");
         }
