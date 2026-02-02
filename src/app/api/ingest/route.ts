@@ -500,8 +500,10 @@ export async function POST(req: NextRequest) {
                 if (story.title_he) upsertPayload.title_he = story.title_he;
                 if (story.body_en) upsertPayload.body_en = story.body_en;
                 if (story.body_he) upsertPayload.body_he = story.body_he;
-                if (story.rabbi_en) upsertPayload.rabbi_en = story.rabbi_en; // Only update if we have a value
-                if (story.rabbi_he) upsertPayload.rabbi_he = story.rabbi_he; // Only update if we have a value
+                // CRITICAL FIX: Always include rabbi fields (even if null) to overwrite corrupt data
+                // This ensures Hebrew text in rabbi_en gets replaced with correct English or null
+                upsertPayload.rabbi_en = story.rabbi_en;
+                upsertPayload.rabbi_he = story.rabbi_he;
                 if (story.tags && story.tags.length > 0) upsertPayload.tags = story.tags;
                 
                 const { error } = await supabase.from('stories').upsert(upsertPayload, { onConflict: 'story_id' });
