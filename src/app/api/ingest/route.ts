@@ -213,8 +213,8 @@ function parseStoryBlock(block: string) {
             return;
         }
 
-        // NEW: Rabbi Extraction
-        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:|הרב:/i;
+        // NEW: Rabbi Extraction (ENGLISH ONLY - no Hebrew patterns)
+        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
         if (regexRabbi.test(cleanLine)) {
             const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
             storyData.rabbi_name = rabbi;
