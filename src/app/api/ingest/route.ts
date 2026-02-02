@@ -5,7 +5,8 @@ import mammoth from "mammoth";
 import pdf from "pdf-parse"; // Revert to default import matching zipper.js behavior
 
 // CONFIGURATION
-export const maxDuration = 60; // 60 seconds (Hobby/Pro limit)
+export const runtime = 'nodejs'; // Required for FormData handling
+export const maxDuration = 300; // Increase to 300s (5 mins) for Pro, will be capped at 60s for Hobby
 
 
 const supabase = createClient(
