@@ -17,6 +17,7 @@ import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, Arrow
 import EditStoryModal from "../../features/stories/components/EditStoryModal";
 import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal";
 import BulkEditRabbiModal from "../../features/stories/components/BulkEditRabbiModal"; 
+import BulkDeleteModal from "../../features/stories/components/BulkDeleteModal";
 
 // TYPES - Matching NEW database schema
 export type Story = {
@@ -57,6 +58,7 @@ export default function AdminDashboard() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   // CHECK AUTH
   useEffect(() => {
@@ -182,6 +184,9 @@ export default function AdminDashboard() {
           <Button variant="outline" onClick={() => setIsBulkEditOpen(true)} className="border-purple-200 text-purple-700 hover:bg-purple-50">
             <Users className="mr-2 h-4 w-4" /> Bulk Edit Rabbis
           </Button>
+          <Button variant="outline" onClick={() => setIsBulkDeleteOpen(true)} className="border-red-200 text-red-700 hover:bg-red-50">
+            <Trash2 className="mr-2 h-4 w-4" /> Bulk Delete
+          </Button>
           <Button onClick={() => setIsUploadOpen(true)} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" /> Upload Batch
           </Button>
@@ -303,6 +308,11 @@ export default function AdminDashboard() {
       <BulkEditRabbiModal
         isOpen={isBulkEditOpen}
         onClose={() => setIsBulkEditOpen(false)}
+        onSuccess={fetchStories}
+      />
+      <BulkDeleteModal
+        isOpen={isBulkDeleteOpen}
+        onClose={() => setIsBulkDeleteOpen(false)}
         onSuccess={fetchStories}
       />
     </div>
