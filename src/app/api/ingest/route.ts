@@ -369,28 +369,25 @@ async function generateEmbedding(text: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    // REFACTOR: Read from JSON body (URLs) instead of FormData to bypass body size limits
-    const body = await req.json();
-    console.log("🔵 API INGEST: Body received", Object.keys(body));
-    const { urlEn, urlHe, nameEn, nameHe } = body;
-
-    if (!urlEn || !urlHe) return NextResponse.json({ error: "Missing file URLs" }, { status: 400 });
-
-    console.log(`📥 Downloading files from storage...`);
+    // Read FormData containing files
+    const formData = await req.formData();
+    console.log("🔵 API INGEST: FormData received");
     
-    // Download files from Signed URLs
-    const [resEn, resHe] = await Promise.all([fetch(urlEn), fetch(urlHe)]);
+    const fileEn = formData.get("fileEn") as File;
+    const fileHe = formData.get("fileHe") as File;
 
-    if (!resEn.ok || !resHe.ok) {
-        console.error("❌ Failed to download files", resEn.status, resHe.status);
-        throw new Error("Failed to download files from storage");
+    if (!fileEn || !fileHe) {
+        return NextResponse.json({ error: "Missing files" }, { status: 400 });
     }
 
-    const bufferEn = Buffer.from(await resEn.arrayBuffer());
-    const bufferHe = Buffer.from(await resHe.arrayBuffer());
+    console.log(`📥 Processing files: ${fileEn.name}, ${fileHe.name}`);
+    
+    // Convert File to Buffer
+    const bufferEn = Buffer.from(await fileEn.arrayBuffer());
+    const bufferHe = Buffer.from(await fileHe.arrayBuffer());
 
-    const textEn = await extractText(bufferEn, nameEn || "file.docx");
-    const textHe = await extractText(bufferHe, nameHe || "file.docx");
+    const textEn = await extractText(bufferEn, fileEn.name);
+    const textHe = await extractText(bufferHe, fileHe.name);
 
     console.log(`[Ingest] TEXT PREVIEW EN: ${textEn.substring(0, 200)}`);
     console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);

@@ -40,80 +40,35 @@ export default function UploadBatchModal({
     }
 
     setLoading(true);
-    setStatus("Uploading files to storage...");
+    setStatus("Processing files... This may take a minute.");
     console.log("📂 Files selected:", fileEn.name, fileHe.name);
 
     try {
-      // 1. Upload English File
-      const extEn = fileEn.name.split('.').pop();
-      const pathEn = `upload_${Date.now()}_en.${extEn}`;
-      console.log("⬆️ Uploading English file to:", pathEn);
-      
-      const { data: upEn, error: uploadErrorEn } = await supabase.storage
-        .from('ingest')
-        .upload(pathEn, fileEn);
+      // Send files directly to API as FormData
+      const formData = new FormData();
+      formData.append("fileEn", fileEn);
+      formData.append("fileHe", fileHe);
 
-      if (uploadErrorEn) {
-        console.error("❌ English upload failed:", uploadErrorEn);
-        throw new Error(`English file upload failed: ${uploadErrorEn.message}. (Does 'ingest' bucket exist?)`);
-      }
-      console.log("✅ English upload success:", upEn);
-
-      // 2. Upload Hebrew File
-      const extHe = fileHe.name.split('.').pop();
-      const pathHe = `upload_${Date.now()}_he.${extHe}`;
-      console.log("⬆️ Uploading Hebrew file to:", pathHe);
-
-      const { data: upHe, error: uploadErrorHe } = await supabase.storage
-        .from('ingest')
-        .upload(pathHe, fileHe);
-
-      if (uploadErrorHe) {
-         console.error("❌ Hebrew upload failed:", uploadErrorHe);
-         throw new Error(`Hebrew file upload failed: ${uploadErrorHe.message}`);
-      }
-      console.log("✅ Hebrew upload success:", upHe);
-
-      setStatus("Files uploaded. Generating access links...");
-
-      // 3. Get Signed URLs
-      console.log("🔑 Generating signed URLs...");
-      const { data: signedEn } = await supabase.storage.from('ingest').createSignedUrl(pathEn, 300); // 5 mins
-      const { data: signedHe } = await supabase.storage.from('ingest').createSignedUrl(pathHe, 300);
-
-      console.log("🔗 URLs generated:", { urlEn: signedEn?.signedUrl, urlHe: signedHe?.signedUrl });
-
-      if (!signedEn?.signedUrl || !signedHe?.signedUrl) throw new Error("Failed to generate signed URLs");
-
-      setStatus("Processing files... This may take a minute.");
-
-      // 4. Send URLs to API
-      console.log("📡 Sending to API...");
+      console.log("📡 Sending files to API...");
       const res = await fetch("/api/ingest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            urlEn: signedEn.signedUrl, 
-            urlHe: signedHe.signedUrl,
-            nameEn: fileEn.name, // Pass original names for extraction logic
-            nameHe: fileHe.name
-        }),
+        body: formData, // No Content-Type header - browser sets it automatically with boundary
       });
 
       console.log("📡 API Response status:", res.status);
       const text = await res.text();
       let data;
       
-        if (text && text.includes("<!DOCTYPE html>")) {
-             throw new Error("Server Timeout (504): The files are too large or processing took too long.");
-        }
-        
-        try {
-            data = JSON.parse(text);
-        } catch (jsonError) {
-             console.error("Failed to parse API response:", text);
-             throw new Error(`Invalid Server Response: ${text.substring(0, 50)}...`);
-        }
+      if (text && text.includes("<!DOCTYPE html>")) {
+           throw new Error("Server Timeout (504): The files are too large or processing took too long.");
+      }
+      
+      try {
+          data = JSON.parse(text);
+      } catch (jsonError) {
+           console.error("Failed to parse API response:", text);
+           throw new Error(`Invalid Server Response: ${text.substring(0, 50)}...`);
+      }
 
       console.log("📡 API Response body:", data);
 
