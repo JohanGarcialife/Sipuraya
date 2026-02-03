@@ -89,6 +89,13 @@ function repairHebrewText(text: string) {
     return repaired;
 }
 
+// Helper: Check if text contains Hebrew characters
+function hasHebrewCharacters(text: string | null): boolean {
+  if (!text) return false;
+  // Hebrew Unicode range: U+0590 to U+05FF
+  return /[\u0590-\u05FF]/.test(text);
+}
+
 // Extract English rabbi name from story content
 function extractEnglishRabbiName(englishBody: string | null) {
   if (!englishBody) return null;
@@ -416,12 +423,18 @@ export async function POST(req: NextRequest) {
         const day = data.day || 1;
         const month = data.month || 'Adar';
         
+        // CRITICAL FIX: Validate rabbi_name to ensure it's English (no Hebrew characters)
+        let validatedRabbiEn = null;
+        if (data.rabbi_name && !hasHebrewCharacters(data.rabbi_name)) {
+          validatedRabbiEn = data.rabbi_name;
+        }
+        
         storiesMap.set(data.id, {
           story_id: data.id,                                    // NEW: story_id as PRIMARY KEY
           date_he: formatHebrewDate(day, month),               // NEW: "א' אדר" format
           date_en: formatEnglishDate(day, month),              // NEW: "1 Adar" format  
           rabbi_he: null,                                      // NEW: Will be filled from Hebrew file
-          rabbi_en: data.rabbi_name,                          // FIX: Use extracted tag first
+          rabbi_en: validatedRabbiEn,                          // FIX: Only use if validated (no Hebrew)
           title_en: data.title_en,
           title_he: data.title_he || null,
           body_en: data.body,
