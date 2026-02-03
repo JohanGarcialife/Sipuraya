@@ -93,6 +93,9 @@ export default function BulkEditRabbiModal({
     setLoading(true);
 
     try {
+      // DEBUG: Log Search Params
+      console.log("[BulkEdit] 🔍 Search Params:", { searchHe, searchEn });
+
       // First, get all matching story IDs
       let query = supabase.from("stories").select("story_id");
       
@@ -104,7 +107,16 @@ export default function BulkEditRabbiModal({
       }
 
       const { data: stories, error: fetchError } = await query;
-      if (fetchError) throw fetchError;
+      
+      if (fetchError) {
+          console.error("[BulkEdit] ❌ Fetch Error:", fetchError);
+          throw fetchError;
+      }
+
+      console.log(`[BulkEdit] found ${stories?.length} matching stories`);
+      if (stories && stories.length > 0) {
+          console.log("[BulkEdit] Sample IDs:", stories.slice(0, 5).map(s => s.story_id));
+      }
 
       if (!stories || stories.length === 0) {
         toast.error("No stories found to update");
@@ -117,13 +129,28 @@ export default function BulkEditRabbiModal({
       if (replaceHe) updateData.rabbi_he = replaceHe;
       if (replaceEn) updateData.rabbi_en = replaceEn;
 
-      // Update all matching stories
-      const { error: updateError } = await supabase
-        .from("stories")
-        .update(updateData)
-        .in("story_id", stories.map(s => s.story_id));
+      console.log("[BulkEdit] 🛠️ Update Payload:", updateData);
 
-      if (updateError) throw updateError;
+      // Update in chunks to avoid request size limits
+      const CHUNK_SIZE = 100;
+      const allIds = stories.map(s => s.story_id);
+      
+      for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
+          const chunk = allIds.slice(i, i + CHUNK_SIZE);
+          console.log(`[BulkEdit] Processing chunk ${i / CHUNK_SIZE + 1}, size: ${chunk.length}`);
+          
+          const { error: updateError } = await supabase
+            .from("stories")
+            .update(updateData)
+            .in("story_id", chunk);
+
+          if (updateError) {
+              console.error(`[BulkEdit] ❌ Update Error in chunk ${i}:`, updateError);
+              throw updateError;
+          }
+      }
+
+      console.log("[BulkEdit] ✅ Update Complete");
 
       toast.success(`Successfully updated ${stories.length} stories!`);
       onSuccess();
@@ -136,6 +163,7 @@ export default function BulkEditRabbiModal({
       setReplaceEn("");
       setMatchCount(null);
     } catch (error: any) {
+      console.error("[BulkEdit] 🚨 Critical Error:", error);
       toast.error("Error updating stories", {
         description: error.message,
       });
