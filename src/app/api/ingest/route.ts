@@ -460,10 +460,23 @@ export async function POST(req: NextRequest) {
         
         // Update fields if present
         if (data.body && data.body.length > 2) existing.body_he = data.body;
-        if (data.rabbi_name) existing.rabbi_he = data.rabbi_name;
         
-        if (!existing.title_he && data.rabbi_name) {
-          existing.title_he = data.rabbi_name;
+        // CRITICAL FIX: Only assign to rabbi_he if it's NOT a title tag (KOTERET, BIOGRAPHY, etc.)
+        if (data.rabbi_name) {
+          const isTitleTag = /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(data.rabbi_name);
+          
+          if (isTitleTag) {
+            // This is a title, not a rabbi name
+            existing.title_he = data.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
+          } else {
+            // This is actually a rabbi name
+            existing.rabbi_he = data.rabbi_name;
+            
+            // Fallback: if no title_he yet, use rabbi name as title
+            if (!existing.title_he) {
+              existing.title_he = data.rabbi_name;
+            }
+          }
         }
 
         if (data.tags && data.tags.length > 0) {
