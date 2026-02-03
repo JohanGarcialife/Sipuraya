@@ -53,10 +53,10 @@ export default function BulkEditRabbiModal({
       let query = supabase.from("stories").select("story_id", { count: "exact", head: false });
 
       if (searchHe) {
-        query = query.eq("rabbi_he", searchHe);
+        query = query.ilike("rabbi_he", `%${searchHe.trim()}%`);
       }
       if (searchEn) {
-        query = query.eq("rabbi_en", searchEn);
+        query = query.ilike("rabbi_en", `%${searchEn.trim()}%`);
       }
 
       const { data, count, error } = await query;
@@ -100,10 +100,12 @@ export default function BulkEditRabbiModal({
       let query = supabase.from("stories").select("story_id");
       
       if (searchHe) {
-        query = query.eq("rabbi_he", searchHe);
+        // Use ilike for partial matching (contains)
+        query = query.ilike("rabbi_he", `%${searchHe.trim()}%`);
       }
       if (searchEn) {
-        query = query.eq("rabbi_en", searchEn);
+        // Use ilike for partial matching (contains)
+        query = query.ilike("rabbi_en", `%${searchEn.trim()}%`);
       }
 
       const { data: stories, error: fetchError } = await query;
@@ -113,6 +115,8 @@ export default function BulkEditRabbiModal({
           throw fetchError;
       }
 
+      // Safety Check: If user types "a" or something that matches EVERYTHING, warn them
+      // In this specialized tool, we just log it, but the Preview button is their safeguard
       console.log(`[BulkEdit] found ${stories?.length} matching stories`);
       if (stories && stories.length > 0) {
           console.log("[BulkEdit] Sample IDs:", stories.slice(0, 5).map(s => s.story_id));
@@ -178,7 +182,7 @@ export default function BulkEditRabbiModal({
         <DialogHeader>
           <DialogTitle>Bulk Edit Rabbi Names</DialogTitle>
           <DialogDescription>
-            Search for stories with a specific rabbi name and replace it across all matching stories.
+            Search for stories containing a specific rabbi name (partial match supported) and replace it across all matching stories.
           </DialogDescription>
         </DialogHeader>
 
