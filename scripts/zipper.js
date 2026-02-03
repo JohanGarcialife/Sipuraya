@@ -424,12 +424,22 @@ async function main() {
       if (parsed.body && parsed.body.length > 10) {
         existing.body_he = parsed.body;
         
-        // Add rabbi name
-        existing.rabbi_name = parsed.rabbi_name || null;
-        
-        // If title_he is empty, use rabbi_name as fallback
-        if (!existing.title_he && parsed.rabbi_name) {
-          existing.title_he = parsed.rabbi_name;
+        // CRITICAL FIX: Only assign to rabbi_he if it's NOT a title tag (KOTERET, BIOGRAPHY, etc.)
+        if (parsed.rabbi_name) {
+          const isTitleTag = /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(parsed.rabbi_name);
+          
+          if (isTitleTag) {
+            // This is a title, not a rabbi name
+            existing.title_he = parsed.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
+          } else {
+            // This is actually a rabbi name
+            existing.rabbi_name = parsed.rabbi_name;
+            
+            // Fallback: if no title_he yet, use rabbi name as title
+            if (!existing.title_he) {
+              existing.title_he = parsed.rabbi_name;
+            }
+          }
         }
         
         // Merge Hebrew tags with existing English tags
