@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,29 @@ export default function BulkEditRabbiModal({
   
   // Preview
   const [matchCount, setMatchCount] = useState<number | null>(null);
+
+  // NEW: Rabbi options from API
+  const [rabbiOptionsHe, setRabbiOptionsHe] = useState<string[]>([]);
+  const [rabbiOptionsEn, setRabbiOptionsEn] = useState<string[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // Fetch unique rabbi names on mount
+  useEffect(() => {
+    const fetchRabbis = async () => {
+      try {
+        const res = await fetch("/api/rabbis/unique");
+        const data = await res.json();
+        setRabbiOptionsHe(data.hebrew || []);
+        setRabbiOptionsEn(data.english || []);
+      } catch (error) {
+        console.error("[BulkEdit] Failed to fetch rabbi options:", error);
+        toast.error("Failed to load rabbi options");
+      } finally {
+        setLoadingOptions(false);
+      }
+    };
+    if (isOpen) fetchRabbis();
+  }, [isOpen]);
 
   const handlePreview = async () => {
     if (!searchHe && !searchEn) {
@@ -193,6 +216,7 @@ export default function BulkEditRabbiModal({
           {/* Search Section */}
           <div className="space-y-4">
             <h4 className="font-semibold text-sm">Find Stories With:</h4>
+            {loadingOptions && <p className="text-sm text-muted-foreground">Loading rabbi names...</p>}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Rabbi Name (Hebrew)</Label>
@@ -201,7 +225,14 @@ export default function BulkEditRabbiModal({
                   onChange={(e) => setSearchHe(e.target.value)}
                   placeholder="רבי שלמה בן מסעוד"
                   dir="rtl"
+                  list="rabbi-options-he"
+                  disabled={loadingOptions}
                 />
+                <datalist id="rabbi-options-he">
+                  {rabbiOptionsHe.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
               <div className="space-y-2">
                 <Label>Rabbi Name (English)</Label>
@@ -209,7 +240,14 @@ export default function BulkEditRabbiModal({
                   value={searchEn}
                   onChange={(e) => setSearchEn(e.target.value)}
                   placeholder="Rabbi Shlomo ben Masud"
+                  list="rabbi-options-en"
+                  disabled={loadingOptions}
                 />
+                <datalist id="rabbi-options-en">
+                  {rabbiOptionsEn.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
               </div>
             </div>
           </div>
