@@ -53,7 +53,8 @@ export default function BulkEditRabbiModal({
       let query = supabase.from("stories").select("story_id", { count: "exact", head: false });
 
       if (searchHe) {
-        query = query.ilike("rabbi_he", `%${searchHe.trim()}%`);
+        const cleanHe = searchHe.trim().normalize("NFC").replace(/[\u200E\u200F\u202A-\u202E]/g, "");
+        query = query.ilike("rabbi_he", `%${cleanHe}%`);
       }
       if (searchEn) {
         query = query.ilike("rabbi_en", `%${searchEn.trim()}%`);
@@ -100,11 +101,13 @@ export default function BulkEditRabbiModal({
       let query = supabase.from("stories").select("story_id");
       
       if (searchHe) {
-        // Use ilike for partial matching (contains)
-        query = query.ilike("rabbi_he", `%${searchHe.trim()}%`);
+        // Normalize Hebrew text to NFC to ensure consistent byte sequence
+        // Also strip invisible characters (like Left-to-Right marks)
+        const cleanHe = searchHe.trim().normalize("NFC").replace(/[\u200E\u200F\u202A-\u202E]/g, "");
+        console.log(`[BulkEdit] Searching Hebrew (normalized): "${cleanHe}"`);
+        query = query.ilike("rabbi_he", `%${cleanHe}%`);
       }
       if (searchEn) {
-        // Use ilike for partial matching (contains)
         query = query.ilike("rabbi_en", `%${searchEn.trim()}%`);
       }
 
