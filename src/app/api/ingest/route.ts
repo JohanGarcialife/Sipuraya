@@ -224,6 +224,7 @@ function parseStoryBlock(block: string) {
         const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
         if (regexRabbi.test(cleanLine)) {
             const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
+            console.log(`[Ingest] 🧩 parseStoryBlock found Rabbi line: "${cleanLine}" -> Extracted: "${rabbi}"`);
             storyData.rabbi_name = rabbi;
             return;
         }
@@ -423,24 +424,28 @@ export async function POST(req: NextRequest) {
         const day = data.day || 1;
         const month = data.month || 'Adar';
         
-        // CRITICAL FIX: Validate rabbi_name to ensure it's English (no Hebrew characters)
-        let validatedRabbiEn = null;
-        if (data.rabbi_name && !hasHebrewCharacters(data.rabbi_name)) {
-          validatedRabbiEn = data.rabbi_name;
-        }
+      if (data.id) {
+        const day = data.day || 1;
+        const month = data.month || 'Adar';
         
+        // DEBUG: Trace Rabbi Extraction
+        if (data.rabbi_name) {
+            console.log(`[Ingest] 🔍 ID: ${data.id} extracted Rabbi (EN parser): "${data.rabbi_name}"`);
+        }
+
         storiesMap.set(data.id, {
-          story_id: data.id,                                    // NEW: story_id as PRIMARY KEY
-          date_he: formatHebrewDate(day, month),               // NEW: "א' אדר" format
-          date_en: formatEnglishDate(day, month),              // NEW: "1 Adar" format  
-          rabbi_he: null,                                      // NEW: Will be filled from Hebrew file
-          rabbi_en: validatedRabbiEn,                          // FIX: Only use if validated (no Hebrew)
+          story_id: data.id,                                    
+          date_he: formatHebrewDate(day, month),               
+          date_en: formatEnglishDate(day, month),              
+          rabbi_he: null,                                      
+          rabbi_en: data.rabbi_name,                          // REVERT: Back to direct assignment for debugging
           title_en: data.title_en,
           title_he: data.title_he || null,
           body_en: data.body,
           body_he: null,
-          tags: data.tags || [],                               // NEW: Tags array
+          tags: data.tags || [],                               
         });
+      }
       }
     });
 
