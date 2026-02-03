@@ -524,6 +524,15 @@ export async function POST(req: NextRequest) {
                 upsertPayload.rabbi_he = story.rabbi_he;
                 if (story.tags && story.tags.length > 0) upsertPayload.tags = story.tags;
                 
+                // DEBUG: Log specific Payload for Upsert (Check for contamination)
+                if (story.story_id === 'Ni0057' || story.story_id === 'Ni0033' || i === 0) {
+                    console.log(`[Ingest] 🛠️ UPSERT PAYLOAD for ${story.story_id}:`, {
+                        rabbi_en: upsertPayload.rabbi_en,
+                        rabbi_he: upsertPayload.rabbi_he,
+                        title_en: upsertPayload.title_en
+                    });
+                }
+
                 const { error } = await supabase.from('stories').upsert(upsertPayload, { onConflict: 'story_id' });
 
                 if (!error) processedCount++;
