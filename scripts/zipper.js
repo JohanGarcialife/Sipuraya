@@ -149,7 +149,8 @@ function parseStoryBlock(block) {
     title_he: null,
     body: null,
     tags: [],
-    rabbi_name: null,
+    rabbi_name_en: null,  // FIXED: Separate fields for EN and HE
+    rabbi_name_he: null,
     koteret: null
   };
   
@@ -215,6 +216,15 @@ function parseStoryBlock(block) {
             storyData.title_he = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
             return;
         }
+        
+        // NEW: Rabbi Extraction (ENGLISH ONLY)
+        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
+        if (regexRabbi.test(cleanLine)) {
+            const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
+            storyData.rabbi_name_en = rabbi;  // FIXED: Store in rabbi_name_en
+            return;
+        }
+        
         return; 
     } 
     
@@ -408,7 +418,8 @@ async function main() {
         body_en: data.body, 
         title_he: data.title_he || null, 
         body_he: null,
-        rabbi_name: null,  // NEW: Will be filled from Hebrew processing
+        rabbi_name_en: data.rabbi_name_en || null,  // FIXED: From English ###Rabbi:
+        rabbi_name_he: null,                         // FIXED: Will be filled from Hebrew
         tags: data.tags || []  // NEW: Include English tags
       });
     }
@@ -432,8 +443,8 @@ async function main() {
             // This is a title, not a rabbi name
             existing.title_he = parsed.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
           } else {
-            // This is actually a rabbi name
-            existing.rabbi_name = parsed.rabbi_name;
+            // This is actually a rabbi name (HEBREW)
+            existing.rabbi_name_he = parsed.rabbi_name;  // FIXED: Store in rabbi_name_he
             
             // Fallback: if no title_he yet, use rabbi name as title
             if (!existing.title_he) {
@@ -464,8 +475,9 @@ async function main() {
   for (let i = 0; i < finalArray.length; i++) {
       const story = finalArray[i];
       
-      // Extract English rabbi name from body
-      const rabbi_en = extractEnglishRabbiName(story.body_en);
+      // FIXED: Use the separate EN and HE rabbi name fields
+      const rabbi_en = story.rabbi_name_en || null;
+      const rabbi_he = story.rabbi_name_he || null;
       
       // Format dates
       const date_he = formatHebrewDate(story.hebrew_day, story.hebrew_month);
@@ -477,7 +489,7 @@ async function main() {
       // NEW SCHEMA: 10 exact columns as client specified
       processedData.push({
           story_id: story.external_id,           // Column 1: Story #
-          rabbi_he: story.rabbi_name || null,    // Column 2: Rabbi Name Hebrew
+          rabbi_he: rabbi_he,                    // Column 2: Rabbi Name Hebrew
           rabbi_en: rabbi_en,                    // Column 3: Rabbi Name English
           date_he: date_he,                      // Column 4: Date Hebrew (e.g., "א' אדר")
           date_en: date_en,                      // Column 5: Date English (e.g., "1 Adar")
