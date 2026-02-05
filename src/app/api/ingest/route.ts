@@ -411,7 +411,9 @@ export async function POST(req: NextRequest) {
 
     const storiesMap = new Map();
 
-    rawStoriesEn.forEach((block, index) => {
+    // Process English first (if exists)
+    if (rawStoriesEn.length > 0) {
+      rawStoriesEn.forEach((block, index) => {
       const data = parseStoryBlock(block);
       
       // DEBUG: Log first story failure details
@@ -446,13 +448,43 @@ export async function POST(req: NextRequest) {
           tags: data.tags || [],                               
         });
       }
-      }
     });
 
     console.log(`[Ingest] English stories mapped: ${storiesMap.size}`);
 
+    // NEW: If no English stories, create entries from Hebrew
+    if (storiesMap.size === 0) {
+      console.log('[Ingest] No English stories - creating from Hebrew-only...');
+      rawStoriesHe.forEach(heStory => {
+        const data = parseHebrewStory(heStory);
+        
+        if (data.id) {
+          const day = data.day || 1;
+          const month = data.month || 'Adar';
+          const isTitleTag = data.rabbi_name && /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(data.rabbi_name);
+          
+          storiesMap.set(data.id, {
+            story_id: data.id,
+            date_he: formatHebrewDate(day, month),
+            date_en: formatEnglishDate(day, month),
+            rabbi_he: isTitleTag ? null : (data.rabbi_name || null),
+            rabbi_en: null,
+            title_en: null,
+            title_he: isTitleTag 
+              ? data.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim()
+              : (data.title_he || null),
+            body_en: null,
+            body_he: data.body || null,
+            tags: data.tags || []
+          });
+        }
+      });
+    }
+
+    // Process Hebrew - Merge with English (only if English stories exist)
     let matchCount = 0;
-    rawStoriesHe.forEach(heStory => {
+    if (storiesMap.size > 0 && rawStoriesEn.length > 0) {
+      rawStoriesHe.forEach(heStory => {
       // Use specialized Hebrew parser
       const data = parseHebrewStory(heStory);
       if (data.id && storiesMap.has(data.id)) {
@@ -485,8 +517,13 @@ export async function POST(req: NextRequest) {
         matchCount++;
       }
     });
+    }
 
-    console.log(`[Ingest] Merged HE stories. Match Count: ${matchCount}`);
+    if (rawStoriesEn.length > 0) {
+      console.log(`[Ingest] Merged HE stories. Match Count: ${matchCount}`);
+    } else {
+      console.log(`[Ingest] Created ${storiesMap.size} Hebrew-only stories`);
+    }
     
     // Populate English Rabbi Names (Post-process fallback)
     for (const [id, story] of storiesMap.entries()) {

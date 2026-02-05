@@ -389,14 +389,18 @@ async function main() {
   const files = findDataFiles();
   if (!files) return;
 
-  const textEn = await getFileContent(files.pathEn);
+  // Support Hebrew-only files (English is now optional)
+  const textEn = files.pathEn ? await getFileContent(files.pathEn) : null;
   const textHe = await getFileContent(files.pathHe);
 
-  if (!textEn || !textHe) return;
+  if (!textHe) {
+    console.error('❌ Hebrew file is required');
+    return;
+  }
 
-  // Process English (standard split)
+  // Process English (standard split) - only if English file exists
   const splitRegex = /###\s*NEW\s*STORY/i;
-  const rawStoriesEn = textEn.split(splitRegex);
+  const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
 
   // Process Hebrew (special split by ID tag)
   const rawStoriesHe = splitHebrewStories(textHe);
@@ -405,8 +409,9 @@ async function main() {
 
   const storiesMap = new Map();
 
-  // Process English
-  rawStoriesEn.forEach(block => {
+  // Process English first (if exists)
+  if (textEn) {
+    rawStoriesEn.forEach(block => {
     const data = parseStoryBlock(block);
     if (data.id) {
       storiesMap.set(data.id, {
@@ -424,8 +429,38 @@ async function main() {
       });
     }
   });
+  } // End if (textEn)
 
-  // Process Hebrew - Merge by ID
+  // NEW: If no English, create entries from Hebrew
+  if (!textEn) {
+    console.log('📝 Creating entries from Hebrew-only files...');
+    rawStoriesHe.forEach(heStory => {
+      const parsed = parseHebrewStory(heStory);
+      
+      if (parsed.id) {
+        const isTitleTag = parsed.rabbi_name && /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(parsed.rabbi_name);
+        
+        storiesMap.set(parsed.id, {
+          external_id: parsed.id,
+          hebrew_day: parsed.day || 1,
+          hebrew_month: parsed.month || 'Adar',
+          hebrew_month_index: parsed.monthIndex || 12,
+          title_en: null,
+          body_en: null,
+          title_he: isTitleTag 
+            ? parsed.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim()
+            : (parsed.title_he || null),
+          body_he: parsed.body || null,
+          rabbi_name_en: null,
+          rabbi_name_he: isTitleTag ? null : (parsed.rabbi_name || null),
+          tags: parsed.tags || []
+        });
+      }
+    });
+  }
+
+  // Process Hebrew - Merge by ID (only if English exists)
+  if (textEn) {
   let mergedCount = 0;
   rawStoriesHe.forEach(heStory => {
     const parsed = parseHebrewStory(heStory);
@@ -466,9 +501,15 @@ async function main() {
       console.log(`⚠️  ID ${parsed.id}: not found in EN map or no ID`);
     }
   });
-  console.log(`\n🔄 Merged ${mergedCount} Hebrew bodies`);
+  } // End if (textEn)
 
   const finalArray = Array.from(storiesMap.values());
+  
+  if (textEn) {
+    console.log(`\n🔄 Merged ${mergedCount} Hebrew bodies`);
+  } else {
+    console.log(`\n✅ Created ${finalArray.length} Hebrew-only stories`);
+  }
   
   // Transform to new schema structure & Generate Embeddings
   let processedData = [];
