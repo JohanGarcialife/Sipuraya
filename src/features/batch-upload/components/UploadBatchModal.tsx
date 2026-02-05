@@ -33,20 +33,21 @@ export default function UploadBatchModal({
 
   const handleUpload = async () => {
     console.log("🚀 Starting upload process...");
-    if (!fileEn || !fileHe) {
-      console.warn("⚠️ Files missing");
-      setStatus("⚠️ Please select both files.");
+    // Hebrew file is required, English is optional
+    if (!fileHe) {
+      console.warn("⚠️ Hebrew file missing");
+      setStatus("⚠️ Please select at least the Hebrew file.");
       return;
     }
 
     setLoading(true);
     setStatus("Processing files... This may take a minute.");
-    console.log("📂 Files selected:", fileEn.name, fileHe.name);
+    console.log("📂 Files selected:", fileEn?.name || "(none)", fileHe.name);
 
     try {
       // Send files directly to API as FormData
       const formData = new FormData();
-      formData.append("fileEn", fileEn);
+      if (fileEn) formData.append("fileEn", fileEn);
       formData.append("fileHe", fileHe);
 
       console.log("📡 Sending files to API...");
@@ -98,14 +99,13 @@ export default function UploadBatchModal({
         <DialogHeader>
           <DialogTitle>Batch Upload (The Zipper)</DialogTitle>
           <DialogDescription>
-            Upload the English and Hebrew files (.docx or .pdf). The system will
-            merge them automatically.
+            Upload Hebrew file (.docx or .pdf). English file is optional - the system can process Hebrew-only stories.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="file-en">English File</Label>
+            <Label htmlFor="file-en">English File (Optional)</Label>
             <Input
               id="file-en"
               type="file"
