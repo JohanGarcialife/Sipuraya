@@ -342,11 +342,33 @@ function parseHebrewStory(story: any) {
     
   const body = content.replace(/\s+/g, ' ').trim();
   
+  // Extract day and month from story.id (e.g., "Ad0001" -> day=1, month="Adar")
+  let day = 1;
+  let month = 'Adar';
+  if (story.id) {
+    const match = story.id.match(/([A-Za-z]+)(\d+)/);
+    if (match) {
+      const monthCode = match[1];
+      const dayNum = parseInt(match[2], 10);
+      day = dayNum;
+      // Map month code to full name (simplified - zipper.js has full mapping)
+      const monthMap: {[key: string]: string} = {
+        'Ad': 'Adar', 'Ni': 'Nissan', 'Iy': 'Iyar', 'Si': 'Sivan',
+        'Ta': 'Tammuz', 'Av': 'Av', 'El': 'Elul', 'Ti': 'Tishrei',
+        'Ch': 'Cheshvan', 'Ki': 'Kislev', 'Te': 'Tevet', 'Sh': 'Shevat'
+      };
+      month = monthMap[monthCode] || 'Adar';
+    }
+  }
+  
   return {
     id: story.id,
     body: repairHebrewText(body), // Normalize and Fix Nikkud
     tags: tags,
-    rabbi_name: rabbi_name
+    rabbi_name: rabbi_name,
+    day: day,
+    month: month,
+    title_he: rabbi_name // Use rabbi_name as title_he for now
   };
 }
 
@@ -426,10 +448,6 @@ export async function POST(req: NextRequest) {
         const day = data.day || 1;
         const month = data.month || 'Adar';
         
-      if (data.id) {
-        const day = data.day || 1;
-        const month = data.month || 'Adar';
-        
         // DEBUG: Trace Rabbi Extraction
         if (data.rabbi_name) {
             console.log(`[Ingest] 🔍 ID: ${data.id} extracted Rabbi (EN parser): "${data.rabbi_name}"`);
@@ -449,6 +467,7 @@ export async function POST(req: NextRequest) {
         });
       }
     });
+    }
 
     console.log(`[Ingest] English stories mapped: ${storiesMap.size}`);
 
