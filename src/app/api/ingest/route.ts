@@ -425,7 +425,7 @@ export async function POST(req: NextRequest) {
     }
     console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);
 
-    const splitRegex = /###\s*NEW\s*STORY/i;
+    const splitRegex = /^(?:###\s*)?NEW\s*STORY/im;
     const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
     
     // Process Hebrew (special split by ID tag logic from zipper.js)

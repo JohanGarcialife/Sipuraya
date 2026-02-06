@@ -399,7 +399,7 @@ async function main() {
   }
 
   // Process English (standard split) - only if English file exists
-  const splitRegex = /###\s*NEW\s*STORY/i;
+  const splitRegex = /^(?:###\s*)?NEW\s*STORY/im;
   const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
 
   // Process Hebrew (special split by ID tag)
