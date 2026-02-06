@@ -404,27 +404,29 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     console.log("🔵 API INGEST: FormData received");
     
-    const fileEn = formData.get("fileEn") as File;
-    const fileHe = formData.get("fileHe") as File;
+    const fileEn = formData.get("fileEn") as File | null;
+    const fileHe = formData.get("fileHe") as File | null;
 
-    if (!fileEn || !fileHe) {
-        return NextResponse.json({ error: "Missing files" }, { status: 400 });
+    if (!fileHe) {
+        return NextResponse.json({ error: "Hebrew file is required" }, { status: 400 });
     }
 
-    console.log(`📥 Processing files: ${fileEn.name}, ${fileHe.name}`);
+    console.log(`📥 Processing files: EN=${fileEn?.name || "(none)"}, HE=${fileHe.name}`);
     
     // Convert File to Buffer
-    const bufferEn = Buffer.from(await fileEn.arrayBuffer());
+    const bufferEn = fileEn ? Buffer.from(await fileEn.arrayBuffer()) : null;
     const bufferHe = Buffer.from(await fileHe.arrayBuffer());
 
-    const textEn = await extractText(bufferEn, fileEn.name);
+    const textEn = fileEn && bufferEn ? await extractText(bufferEn, fileEn.name) : "";
     const textHe = await extractText(bufferHe, fileHe.name);
 
-    console.log(`[Ingest] TEXT PREVIEW EN: ${textEn.substring(0, 200)}`);
+    if (textEn) {
+      console.log(`[Ingest] TEXT PREVIEW EN: ${textEn.substring(0, 200)}`);
+    }
     console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);
 
     const splitRegex = /###\s*NEW\s*STORY/i;
-    const rawStoriesEn = textEn.split(splitRegex);
+    const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
     
     // Process Hebrew (special split by ID tag logic from zipper.js)
     const rawStoriesHe = splitHebrewStories(textHe);
