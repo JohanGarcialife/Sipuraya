@@ -437,13 +437,19 @@ export async function POST(req: NextRequest) {
 
     // Process English first (if exists)
     if (rawStoriesEn.length > 0) {
+      let skippedEnStories = 0;
       rawStoriesEn.forEach((block, index) => {
       const data = parseStoryBlock(block);
       
-      // DEBUG: Log first story failure details
-      if (index === 0 && !data.id) {
-          console.log(`[Ingest] DEBUG: First story failed to produce ID.`);
-          console.log(`[Ingest] DEBUG: First 5 lines of block:\n${block.split('\n').slice(0, 5).join('\n')}`);
+      // ENHANCED DEBUG: Track stories without IDs
+      if (!data.id) {
+          skippedEnStories++;
+          // Log first few failures and any in the Ad1289-Ad1409 range
+          if (index < 3 || (block.includes('Ad1') && (block.includes('1289') || block.includes('1300') || block.includes('1324')))) {
+            console.log(`[Ingest] ⚠️ Story #${index} has NO ID - SKIPPED`);
+            console.log(`[Ingest] First 5 lines:\n${block.split('\n').slice(0, 5).join('\n')}`);
+          }
+          return; // Skip this story
       }
       
       if (data.id) {
@@ -476,8 +482,14 @@ export async function POST(req: NextRequest) {
     // NEW: If no English stories, create entries from Hebrew
     if (storiesMap.size === 0) {
       console.log('[Ingest] No English stories - creating from Hebrew-only...');
+      let skippedHeOnlyStories = 0;
       rawStoriesHe.forEach(heStory => {
         const data = parseHebrewStory(heStory);
+        
+        if (!data.id) {
+          skippedHeOnlyStories++;
+          return;
+        }
         
         if (data.id) {
           const day = data.day || 1;
@@ -500,6 +512,9 @@ export async function POST(req: NextRequest) {
           });
         }
       });
+      if (skippedHeOnlyStories > 0) {
+        console.log(`[Ingest] ⚠️ Skipped ${skippedHeOnlyStories} Hebrew-only stories due to missing IDs`);
+      }
     }
 
     // Process Hebrew - Merge with English (only if English stories exist)
