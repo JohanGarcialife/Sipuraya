@@ -460,8 +460,8 @@ async function main() {
   }
 
   // Process Hebrew - Merge by ID (only if English exists)
-  if (textEn) {
   let mergedCount = 0;
+  if (textEn) {
   rawStoriesHe.forEach(heStory => {
     const parsed = parseHebrewStory(heStory);
     
