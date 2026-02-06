@@ -92,13 +92,19 @@ function cleanId(id) {
 }
 
 function smartFindId(line) {
-    let match = line.match(/(Ad\d+)/i);
+    // Match any letter prefix (Ad, Xx, Yy, etc.) followed by digits
+    // Supports 1-2 letter prefixes: Ad1234, Xx0172, Y99, etc.
+    let match = line.match(/\b([A-Za-z]{1,2}\d+)\b/i);
     if (match) return match[1];
-    match = line.match(/(\d+Ad)/i);
+    
+    // Fallback: digits followed by letters (rare format)
+    match = line.match(/(\d+[A-Za-z]{1,2})/i);
     if (match) {
-        const numbers = match[1].replace(/Ad/i, '');
-        return `Ad${numbers}`;
+        const numbers = match[1].replace(/[A-Za-z]/gi, '');
+        const letters = match[1].replace(/\d/g, '');
+        return `${letters}${numbers}`;
     }
+    
     return null;
 }
 

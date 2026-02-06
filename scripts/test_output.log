@@ -1,0 +1,96 @@
+[dotenv@17.2.3] injecting env (5) from ../.env.local -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+📊 Processing: EN (36) | HE (121)
+⚠️  ID Ad1289: not found in EN map or no ID
+⚠️  ID Ad1290: not found in EN map or no ID
+⚠️  ID Ad1291: not found in EN map or no ID
+⚠️  ID Ad1292: not found in EN map or no ID
+⚠️  ID Ad1293: not found in EN map or no ID
+⚠️  ID Ad1294: not found in EN map or no ID
+⚠️  ID Ad1295: not found in EN map or no ID
+⚠️  ID Ad1296: not found in EN map or no ID
+⚠️  ID Ad1297: not found in EN map or no ID
+⚠️  ID Ad1298: not found in EN map or no ID
+⚠️  ID Ad1299: not found in EN map or no ID
+⚠️  ID Ad1300: not found in EN map or no ID
+⚠️  ID Ad1301: not found in EN map or no ID
+⚠️  ID Ad1302: not found in EN map or no ID
+⚠️  ID Ad1303: not found in EN map or no ID
+⚠️  ID Ad1304: not found in EN map or no ID
+⚠️  ID Ad1305: not found in EN map or no ID
+⚠️  ID Ad1306: not found in EN map or no ID
+⚠️  ID Ad1307: not found in EN map or no ID
+⚠️  ID Ad1308: not found in EN map or no ID
+⚠️  ID Ad1309: not found in EN map or no ID
+⚠️  ID Ad1310: not found in EN map or no ID
+⚠️  ID Ad1311: not found in EN map or no ID
+⚠️  ID Ad1312: not found in EN map or no ID
+⚠️  ID Ad1313: not found in EN map or no ID
+⚠️  ID Ad1314: not found in EN map or no ID
+⚠️  ID Ad1315: not found in EN map or no ID
+⚠️  ID Ad1316: not found in EN map or no ID
+⚠️  ID Ad1317: not found in EN map or no ID
+⚠️  ID Ad1318: not found in EN map or no ID
+⚠️  ID Ad1319: not found in EN map or no ID
+⚠️  ID Ad1320: not found in EN map or no ID
+⚠️  ID Ad1321: not found in EN map or no ID
+⚠️  ID Ad1322: not found in EN map or no ID
+⚠️  ID Ad1323: not found in EN map or no ID
+⚠️  ID Ad1324: not found in EN map or no ID
+⚠️  ID Ad1325: not found in EN map or no ID
+⚠️  ID Ad1326: not found in EN map or no ID
+⚠️  ID Ad1327: not found in EN map or no ID
+⚠️  ID Ad1328: not found in EN map or no ID
+⚠️  ID Ad1329: not found in EN map or no ID
+⚠️  ID Ad1330: not found in EN map or no ID
+⚠️  ID Ad1331: not found in EN map or no ID
+⚠️  ID Ad1332: not found in EN map or no ID
+⚠️  ID Ad1333: not found in EN map or no ID
+⚠️  ID Ad1334: not found in EN map or no ID
+⚠️  ID Ad1335: not found in EN map or no ID
+⚠️  ID Ad1336: not found in EN map or no ID
+⚠️  ID Ad1337: not found in EN map or no ID
+⚠️  ID Ad1338: not found in EN map or no ID
+⚠️  ID Ad1339: not found in EN map or no ID
+⚠️  ID Ad1340: not found in EN map or no ID
+⚠️  ID Ad1341: not found in EN map or no ID
+⚠️  ID Ad1342: not found in EN map or no ID
+⚠️  ID Ad1343: not found in EN map or no ID
+⚠️  ID Ad1344: not found in EN map or no ID
+⚠️  ID Ad1345: not found in EN map or no ID
+⚠️  ID Ad1346: not found in EN map or no ID
+⚠️  ID Ad1347: not found in EN map or no ID
+⚠️  ID Ad1348: not found in EN map or no ID
+⚠️  ID Ad1349: not found in EN map or no ID
+⚠️  ID Ad1350: not found in EN map or no ID
+⚠️  ID Ad1351: not found in EN map or no ID
+⚠️  ID Ad1352: not found in EN map or no ID
+⚠️  ID Ad1353: not found in EN map or no ID
+⚠️  ID Ad1354: not found in EN map or no ID
+⚠️  ID Ad1355: not found in EN map or no ID
+⚠️  ID Ad1356: not found in EN map or no ID
+⚠️  ID Ad1357: not found in EN map or no ID
+⚠️  ID Ad1358: not found in EN map or no ID
+⚠️  ID Ad1359: not found in EN map or no ID
+⚠️  ID Ad1360: not found in EN map or no ID
+⚠️  ID Ad1361: not found in EN map or no ID
+⚠️  ID Ad1362: not found in EN map or no ID
+⚠️  ID Ad1363: not found in EN map or no ID
+⚠️  ID Ad1364: not found in EN map or no ID
+⚠️  ID Ad1365: not found in EN map or no ID
+⚠️  ID Ad1366: not found in EN map or no ID
+⚠️  ID Ad1367: not found in EN map or no ID
+⚠️  ID Ad1368: not found in EN map or no ID
+⚠️  ID Ad1369: not found in EN map or no ID
+⚠️  ID Ad1370: not found in EN map or no ID
+⚠️  ID Ad1371: not found in EN map or no ID
+⚠️  ID Ad1372: not found in EN map or no ID
+⚠️  ID Ad1373: not found in EN map or no ID
+⚠️  ID Ad1374: not found in EN map or no ID
+/Users/johan/Desktop/Proyectos/Sipuraya Project/sipuraya/scripts/zipper.js:509
+    console.log(`\n🔄 Merged ${mergedCount} Hebrew bodies`);
+                               ^
+
+ReferenceError: mergedCount is not defined
+    at main (/Users/johan/Desktop/Proyectos/Sipuraya Project/sipuraya/scripts/zipper.js:509:32)
+
+Node.js v22.18.0

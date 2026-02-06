@@ -22,7 +22,70 @@ const MONTH_MAP = {
   'adar': 12, 'adar i': 12, 'adar ii': 13, 'adar 1': 12, 'adar 2': 13
 };
 
+// Hebrew month name mapping (English → Hebrew)
+const HEBREW_MONTH_NAMES = {
+  'Nisan': 'ניסן',
+  'Iyar': 'אייר',
+  'Sivan': 'סיון',
+  'Tamuz': 'תמוז',
+  'Av': 'אב',
+  'Elul': 'אלול',
+  'Tishrei': 'תשרי',
+  'Cheshvan': 'חשון',
+  'Kislev': 'כסלו',
+  'Tevet': 'טבת',
+  'Shevat': 'שבט',
+  'Adar': 'אדר',
+  'Adar I': 'אדר א׳',
+  'Adar II': 'אדר ב׳'
+};
+
+// Hebrew gematria numbers for days (1-30)
+const HEBREW_DAY_NUMBERS = {
+  1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'",
+  6: "ו'", 7: "ז'", 8: "ח'", 9: "ט'", 10: "י'",
+  11: "י\"א", 12: "י\"ב", 13: "י\"ג", 14: "י\"ד", 15: "ט\"ו",
+  16: "ט\"ז", 17: "י\"ז", 18: "י\"ח", 19: "י\"ט", 20: "כ'",
+  21: "כ\"א", 22: "כ\"ב", 23: "כ\"ג", 24: "כ\"ד", 25: "כ\"ה",
+  26: "כ\"ו", 27: "כ\"ז", 28: "כ\"ח", 29: "כ\"ט", 30: "ל'"
+};
+
 // --- HELPERS ---
+
+// Format Hebrew date: "א' אדר", "י"א ניסן", etc.
+function formatHebrewDate(day, monthEnglish) {
+  const hebrewDay = HEBREW_DAY_NUMBERS[day] || day.toString();
+  const hebrewMonth = HEBREW_MONTH_NAMES[monthEnglish] || monthEnglish;
+  return `${hebrewDay} ${hebrewMonth}`;
+}
+
+// Format English date: "1 Adar", "15 Nisan", etc. (NO ordinal)
+function formatEnglishDate(day, monthEnglish) {
+  return `${day} ${monthEnglish}`;
+}
+
+// Extract English rabbi name from story content
+function extractEnglishRabbiName(englishBody) {
+  if (!englishBody) return null;
+  
+  // Pattern 1: "Rabbi [Name]" at the beginning of the text
+  const pattern1 = /^Rabbi\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+[A-Z][a-z]+)?)/m;
+  const match1 = englishBody.match(pattern1);
+  if (match1) return `Rabbi ${match1[1]}`;
+  
+  // Pattern 2: Look for rabbi name in first few sentences
+  const firstPart = englishBody.substring(0, 500);
+  const pattern2 = /(?:the\s+)?(?:holy\s+)?Rabbi\s+([A-Z][a-z]+(?:\s+(?:ben\s+)?[A-Z][a-z]+)*)/i;
+  const match2 = firstPart.match(pattern2);
+  if (match2) return `Rabbi ${match2[1]}`;
+  
+  // Pattern 3: "R' [Name]" or "R. [Name]"
+  const pattern3 = /R['.\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/;
+  const match3 = firstPart.match(pattern3);
+  if (match3) return `Rabbi ${match3[1]}`;
+  
+  return null;
+}
 function cleanId(id) {
   if (!id) return null;
   return id.replace(/[^a-zA-Z0-9]/g, '');
@@ -86,7 +149,8 @@ function parseStoryBlock(block) {
     title_he: null,
     body: null,
     tags: [],
-    rabbi_name: null,
+    rabbi_name_en: null,  // FIXED: Separate fields for EN and HE
+    rabbi_name_he: null,
     koteret: null
   };
   
@@ -152,6 +216,15 @@ function parseStoryBlock(block) {
             storyData.title_he = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
             return;
         }
+        
+        // NEW: Rabbi Extraction (ENGLISH ONLY)
+        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
+        if (regexRabbi.test(cleanLine)) {
+            const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
+            storyData.rabbi_name_en = rabbi;  // FIXED: Store in rabbi_name_en
+            return;
+        }
+        
         return; 
     } 
     
@@ -280,9 +353,9 @@ function parseHebrewStory(story) {
   // Trim first to ensure pattern starts at the beginning
   content = content.trim();
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-  const dateMarkerPattern = new RegExp(`^[א-ת]+['"\u05F3\u05F4][א-ת]*\s*(${hebrewMonths})`, 'i');
-  content = content.replace(dateMarkerPattern, '');
-  
+  const dateMarkerPattern = new RegExp(`^[א-ת]+['\"׳״][א-ת]*\\s*(${hebrewMonths})`, 'i');
+        content = content.replace(dateMarkerPattern, '');
+    
   // Clean up multiple spaces and trim again
   const body = content.replace(/\s+/g, ' ').trim();
   
@@ -316,14 +389,18 @@ async function main() {
   const files = findDataFiles();
   if (!files) return;
 
-  const textEn = await getFileContent(files.pathEn);
+  // Support Hebrew-only files (English is now optional)
+  const textEn = files.pathEn ? await getFileContent(files.pathEn) : null;
   const textHe = await getFileContent(files.pathHe);
 
-  if (!textEn || !textHe) return;
+  if (!textHe) {
+    console.error('❌ Hebrew file is required');
+    return;
+  }
 
-  // Process English (standard split)
+  // Process English (standard split) - only if English file exists
   const splitRegex = /###\s*NEW\s*STORY/i;
-  const rawStoriesEn = textEn.split(splitRegex);
+  const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
 
   // Process Hebrew (special split by ID tag)
   const rawStoriesHe = splitHebrewStories(textHe);
@@ -332,8 +409,9 @@ async function main() {
 
   const storiesMap = new Map();
 
-  // Process English
-  rawStoriesEn.forEach(block => {
+  // Process English first (if exists)
+  if (textEn) {
+    rawStoriesEn.forEach(block => {
     const data = parseStoryBlock(block);
     if (data.id) {
       storiesMap.set(data.id, {
@@ -345,13 +423,44 @@ async function main() {
         body_en: data.body, 
         title_he: data.title_he || null, 
         body_he: null,
-        rabbi_name: null,  // NEW: Will be filled from Hebrew processing
+        rabbi_name_en: data.rabbi_name_en || null,  // FIXED: From English ###Rabbi:
+        rabbi_name_he: null,                         // FIXED: Will be filled from Hebrew
         tags: data.tags || []  // NEW: Include English tags
       });
     }
   });
+  } // End if (textEn)
 
-  // Process Hebrew - Merge by ID
+  // NEW: If no English, create entries from Hebrew
+  if (!textEn) {
+    console.log('📝 Creating entries from Hebrew-only files...');
+    rawStoriesHe.forEach(heStory => {
+      const parsed = parseHebrewStory(heStory);
+      
+      if (parsed.id) {
+        const isTitleTag = parsed.rabbi_name && /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(parsed.rabbi_name);
+        
+        storiesMap.set(parsed.id, {
+          external_id: parsed.id,
+          hebrew_day: parsed.day || 1,
+          hebrew_month: parsed.month || 'Adar',
+          hebrew_month_index: parsed.monthIndex || 12,
+          title_en: null,
+          body_en: null,
+          title_he: isTitleTag 
+            ? parsed.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim()
+            : (parsed.title_he || null),
+          body_he: parsed.body || null,
+          rabbi_name_en: null,
+          rabbi_name_he: isTitleTag ? null : (parsed.rabbi_name || null),
+          tags: parsed.tags || []
+        });
+      }
+    });
+  }
+
+  // Process Hebrew - Merge by ID (only if English exists)
+  if (textEn) {
   let mergedCount = 0;
   rawStoriesHe.forEach(heStory => {
     const parsed = parseHebrewStory(heStory);
@@ -361,12 +470,22 @@ async function main() {
       if (parsed.body && parsed.body.length > 10) {
         existing.body_he = parsed.body;
         
-        // Add rabbi name
-        existing.rabbi_name = parsed.rabbi_name || null;
-        
-        // If title_he is empty, use rabbi_name as fallback
-        if (!existing.title_he && parsed.rabbi_name) {
-          existing.title_he = parsed.rabbi_name;
+        // CRITICAL FIX: Only assign to rabbi_he if it's NOT a title tag (KOTERET, BIOGRAPHY, etc.)
+        if (parsed.rabbi_name) {
+          const isTitleTag = /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(parsed.rabbi_name);
+          
+          if (isTitleTag) {
+            // This is a title, not a rabbi name
+            existing.title_he = parsed.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
+          } else {
+            // This is actually a rabbi name (HEBREW)
+            existing.rabbi_name_he = parsed.rabbi_name;  // FIXED: Store in rabbi_name_he
+            
+            // Fallback: if no title_he yet, use rabbi name as title
+            if (!existing.title_he) {
+              existing.title_he = parsed.rabbi_name;
+            }
+          }
         }
         
         // Merge Hebrew tags with existing English tags
@@ -386,17 +505,36 @@ async function main() {
 
   const finalArray = Array.from(storiesMap.values());
   
-  // Generate Embeddings & Append to JSON
+  // Transform to new schema structure & Generate Embeddings
   let processedData = [];
   for (let i = 0; i < finalArray.length; i++) {
       const story = finalArray[i];
+      
+      // FIXED: Use the separate EN and HE rabbi name fields
+      const rabbi_en = story.rabbi_name_en || null;
+      const rabbi_he = story.rabbi_name_he || null;
+      
+      // Format dates
+      const date_he = formatHebrewDate(story.hebrew_day, story.hebrew_month);
+      const date_en = formatEnglishDate(story.hebrew_day, story.hebrew_month);
+      
       const textForAI = story.body_he || story.body_en;
       const embedding = await generateEmbedding(textForAI);
       
+      // NEW SCHEMA: 10 exact columns as client specified
       processedData.push({
-          ...story,
-          embedding,
-          is_published: true
+          story_id: story.external_id,           // Column 1: Story #
+          rabbi_he: rabbi_he,                    // Column 2: Rabbi Name Hebrew
+          rabbi_en: rabbi_en,                    // Column 3: Rabbi Name English
+          date_he: date_he,                      // Column 4: Date Hebrew (e.g., "א' אדר")
+          date_en: date_en,                      // Column 5: Date English (e.g., "1 Adar")
+          title_he: story.title_he || null,      // Column 6: Title Hebrew
+          title_en: story.title_en || null,      // Column 7: Title English
+          body_he: story.body_he || null,        // Column 8: Story Content Hebrew
+          body_en: story.body_en || null,        // Column 9: Story Content English
+          tags: [...new Set(story.tags)],        // Column 10: Tags (array, deduplicated)
+          embedding: embedding,                  // Keep for AI, but may not upload
+          is_published: true                     // Keep for DB
       });
       
       if (i % 10 === 0) process.stdout.write('.');
