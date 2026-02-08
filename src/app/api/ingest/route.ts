@@ -36,9 +36,15 @@ const HEBREW_DAY_NUMBERS: Record<number, string> = {
   1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'",
   6: "ו'", 7: "ז'", 8: "ח'", 9: "ט'", 10: "י'",
   11: 'י"א', 12: 'י"ב', 13: 'י"ג', 14: 'י"ד', 15: 'ט"ו',
-  16: 'ט"ז', 17: 'י"ז', 18: 'י"ח', 19: 'י"ט', 20: "כ'",
   21: 'כ"א', 22: 'כ"ב', 23: 'כ"ג', 24: 'כ"ד', 25: 'כ"ה',
   26: 'כ"ו', 27: 'כ"ז', 28: 'כ"ח', 29: 'כ"ט', 30: "ל'"
+};
+
+// Reverse map for parsing Hebrew dates (Gematria -> Number)
+const GEMATRIA_MAP: Record<string, number> = {
+  "א": 1, "ב": 2, "ג": 3, "ד": 4, "ה": 5, "ו": 6, "ז": 7, "ח": 8, "ט": 9, "י": 10,
+  "יא": 11, "יב": 12, "יג": 13, "יד": 14, "טו": 15, "טז": 16, "יז": 17, "יח": 18, "יט": 19, "כ": 20,
+  "כא": 21, "כב": 22, "כג": 23, "כד": 24, "כה": 25, "כו": 26, "כז": 27, "כח": 28, "כט": 29, "ל": 30
 };
 
 // Format Hebrew date: "א' אדר"
@@ -59,14 +65,17 @@ function cleanId(id: string) {
 }
 
 function smartFindId(line: string) {
-    // Generalize to find any ID format like Ad0001, Ni0001, Pe0001
-    let match = line.match(/([A-Za-z]{2}\d+)/i);
+    // Match any letter prefix (Ad, Xx, Yy, etc.) followed by digits
+    // Supports 1-2 letter prefixes: Ad1234, Xx0172, Y99, etc.
+    let match = line.match(/\b([A-Za-z]{1,2}\d+)\b/i);
     if (match) return match[1];
     
-    // Handle reverse format 0001Ad -> Ad0001
-    match = line.match(/(\d+)([A-Za-z]{2})/i); 
+    // Fallback: digits followed by letters (rare format)
+    match = line.match(/(\d+[A-Za-z]{1,2})/i); 
     if (match) {
-        return `${match[2]}${match[1]}`;
+        const numbers = match[1].replace(/[A-Za-z]/gi, '');
+        const letters = match[1].replace(/\d/g, '');
+        return `${letters}${numbers}`;
     }
     return null;
 }
@@ -182,7 +191,7 @@ function parseStoryBlock(block: string) {
         }
     }
 
-    if (cleanLine.includes('###')) {
+    if (cleanLine.includes('###') || regexDate.test(cleanLine)) {
         if (regexDate.test(cleanLine)) {
             const rawDate = cleanLine.replace(/###|Date:|תאריך:/gi, '').trim(); 
             const dayMatch = rawDate.match(/(\d+)/);
@@ -269,8 +278,8 @@ function parseStoryBlock(block: string) {
 function splitHebrewStories(text: string) {
   const stories: any[] = [];
   
-  // Split by the Hebrew ID tag pattern (Generalized for Ad, Ni, etc.)
-  const regex = /#סיפור_מספר:\s*([A-Za-z]{2}\d+)/gi;
+  // Split by the Hebrew ID tag pattern (Generalized for Ad, Ni, Xx, etc.)
+  const regex = /#סיפור_מספר:\s*([A-Za-z]{1,2}\d+)/gi;
   const matches = [];
   let match;
   
@@ -337,7 +346,34 @@ function parseHebrewStory(story: any) {
   
   content = content.trim();
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-  const dateMarkerPattern = new RegExp(`^[א-ת]+['"׳״][א-ת]*\\s*(${hebrewMonths})`, 'i');
+  const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
+  
+  // Extract date from content if present
+  let parsedDay = 1;
+  let parsedMonth = 'Adar';
+  let dateFound = false;
+
+  const dateMatch = content.match(dateMarkerPattern);
+  if (dateMatch) {
+      const dayStr = dateMatch[1].replace(/['"׳״]/g, ''); // Remove quotes
+      const monthStr = dateMatch[2];
+      
+      // Parse day from Gematria
+      if (GEMATRIA_MAP[dayStr]) {
+          parsedDay = GEMATRIA_MAP[dayStr];
+      }
+      
+      // Map Hebrew month to English
+      for (const [eng, heb] of Object.entries(HEBREW_MONTH_NAMES)) {
+          if (heb === monthStr || monthStr.includes(heb)) {
+              parsedMonth = eng;
+              break;
+          }
+      }
+      dateFound = true;
+      console.log(`[Ingest] 📅 Extracted Hebrew date: ${dayStr} (${parsedDay}) ${monthStr} -> ${parsedMonth}`);
+  }
+
   content = content.replace(dateMarkerPattern, '');
     
   const body = content.replace(/\s+/g, ' ').trim();
@@ -350,7 +386,16 @@ function parseHebrewStory(story: any) {
     if (match) {
       const monthCode = match[1];
       const dayNum = parseInt(match[2], 10);
-      day = dayNum;
+      
+      // Use parsed date if found, otherwise fallback to ID-based (which is often wrong for day)
+      // For month, ID-based prefix (Ni, Ad) is usually reliable for the Month, but Day is NOT reliable from ID.
+      if (dateFound) {
+          day = parsedDay;
+          month = parsedMonth; // Prefer parsed month too
+      } else {
+          // Fallback to ID-based logic (Legacy/Last Resort)
+          day = dayNum; // This was the bug for Ni0070 -> Day 70
+      }
       // Map month code to full name (simplified - zipper.js has full mapping)
       const monthMap: {[key: string]: string} = {
         'Ad': 'Adar', 'Ni': 'Nissan', 'Iy': 'Iyar', 'Si': 'Sivan',
