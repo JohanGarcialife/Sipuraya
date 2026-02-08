@@ -24,8 +24,8 @@ const MONTH_MAP: Record<string, number> = {
 
 // Hebrew month names for date formatting
 const HEBREW_MONTH_NAMES: Record<string, string> = {
-  'Nisan': 'ניסן', 'Iyar': 'אייר', 'Sivan': 'סיון',
-  'Tamuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
+  'Nisan': 'ניסן', 'Nissan': 'ניסן', 'Iyar': 'אייר', 'Sivan': 'סיון',
+  'Tamuz': 'תמוז', 'Tammuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
   'Tishrei': 'תשרי', 'Cheshvan': 'חשון', 'Kislev': 'כסלו',
   'Tevet': 'טבת', 'Shevat': 'שבט', 'Adar': 'אדר',
   'Adar I': 'אדר א', 'Adar II': 'אדר ב'
