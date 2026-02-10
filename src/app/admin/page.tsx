@@ -209,7 +209,7 @@ export default function AdminDashboard() {
             className="bg-white border border-gray-200 rounded-md px-3 py-2 text-sm min-w-[140px] focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Months</option>
-            <option value="Nisan">Nisan / ניסן</option>
+            <option value="Nissan">Nissan / ניסן</option>
             <option value="Iyar">Iyar / אייר</option>
             <option value="Sivan">Sivan / סיון</option>
             <option value="Tamuz">Tamuz / תמוז</option>
