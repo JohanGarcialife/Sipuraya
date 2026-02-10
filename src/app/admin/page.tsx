@@ -49,6 +49,9 @@ export default function AdminDashboard() {
   const [totalCount, setTotalCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   
+  // Month Filter State
+  const [monthFilter, setMonthFilter] = useState("");
+  
   // Sorting State
   const [sortCol, setSortCol] = useState<string>("story_id");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
@@ -79,6 +82,11 @@ export default function AdminDashboard() {
       let query = supabase
         .from("stories")
         .select("*", { count: 'exact' });
+
+      // MONTH FILTER
+      if (monthFilter) {
+        query = query.ilike('date_en', `%${monthFilter}%`);
+      }
 
       // SMART SEARCH LOGIC
       if (searchTerm.trim()) {
@@ -124,7 +132,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchTerm, sortCol, sortAsc]);
+  }, [page, searchTerm, monthFilter, sortCol, sortAsc]);
 
   useEffect(() => {
     fetchStories();
@@ -193,8 +201,27 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="flex gap-2 mb-6 max-w-md">
+      {/* Search + Month Filter */}
+      <div className="flex gap-2 mb-6 max-w-2xl">
+          <select
+            value={monthFilter}
+            onChange={(e) => { setMonthFilter(e.target.value); setPage(1); }}
+            className="bg-white border border-gray-200 rounded-md px-3 py-2 text-sm min-w-[140px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Months</option>
+            <option value="Nisan">Nisan / ניסן</option>
+            <option value="Iyar">Iyar / אייר</option>
+            <option value="Sivan">Sivan / סיון</option>
+            <option value="Tamuz">Tamuz / תמוז</option>
+            <option value="Av">Av / אב</option>
+            <option value="Elul">Elul / אלול</option>
+            <option value="Tishrei">Tishrei / תשרי</option>
+            <option value="Cheshvan">Cheshvan / חשון</option>
+            <option value="Kislev">Kislev / כסלו</option>
+            <option value="Tevet">Tevet / טבת</option>
+            <option value="Shevat">Shevat / שבט</option>
+            <option value="Adar">Adar / אדר</option>
+          </select>
           <Input 
             placeholder="Search in Title, Body, or ID..." 
             value={searchTerm}

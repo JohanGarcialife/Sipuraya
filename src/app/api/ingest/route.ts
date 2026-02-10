@@ -94,6 +94,11 @@ function repairHebrewText(text: string) {
     
     // Remove the "dotted circle" placeholder if present (U+25CC)
     repaired = repaired.replace(/\u25CC/g, '');
+
+    // Remove Left-to-Right and Right-to-Left marks that might confuse rendering
+    // U+200E (LTR), U+200F (RTL), U+202A-U+202E (Embedding/Override), U+00AD (Soft Hyphen)
+    // Also removing Zero Width Space (U+200B) and Zero Width No-Break Space (U+FEFF)
+    repaired = repaired.replace(/[\u200E\u200F\u202A-\u202E\u00AD\u200B\uFEFF]/g, '');
     
     return repaired;
 }
@@ -317,10 +322,20 @@ function parseHebrewStory(story: any) {
   // Remove ###NEW STORY
   content = content.replace(/###NEW STORY/gi, '');
   
-  // EXTRACT RABBI NAME
-  const rabbiMatch = content.match(/###([^#]+)###/);
-  if (rabbiMatch) {
-    rabbi_name = rabbiMatch[1].trim();
+  // EXTRACT RABBI NAME using split approach
+  // Format: ###KOTERET: title###rabbi_name###date_body...
+  // The rabbi name segment contains " quotes which breaks regex ###([^#]+)### matching.
+  const segments = content.split('###').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+  for (const seg of segments) {
+    if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
+    if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
+    if (/^(Date|תאריך)/i.test(seg)) continue;
+    if (seg.length > 200) continue;
+    const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+    const datePattern = new RegExp(`^[א-ת]+['\"׳״]?[א-ת]*\\s*(${hebrewMonths})`);
+    if (datePattern.test(seg)) continue;
+    rabbi_name = seg;
+    break;
   }
   
   // Tags extraction

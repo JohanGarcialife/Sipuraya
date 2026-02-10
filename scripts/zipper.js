@@ -312,11 +312,26 @@ function parseHebrewStory(story) {
   // Remove ###NEW STORY to expose the rabbi name
   content = content.replace(/###NEW STORY/gi, '');
   
-  // EXTRACT RABBI NAME: It's the FIRST ###...### pattern after removing ID and NEW STORY
-  // Example: ###רבי אברהם אבן עזרא###
-  const rabbiMatch = content.match(/###([^#]+)###/);
-  if (rabbiMatch) {
-    rabbi_name = rabbiMatch[1].trim();
+  // EXTRACT RABBI NAME using split approach
+  // Format: ###KOTERET: title###rabbi_name###date_body...
+  // OR:     ###rabbi_name###date_body...
+  // The rabbi name segment contains " quotes which breaks regex ###([^#]+)### matching.
+  // So we split by '###' and look for the first segment that is NOT a metadata tag.
+  const segments = content.split('###').map(s => s.trim()).filter(s => s.length > 0);
+  for (const seg of segments) {
+    // Skip known metadata tags
+    if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
+    if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
+    if (/^(Date|תאריך)/i.test(seg)) continue;
+    // Skip segments that are too long (likely body text, not a name)
+    if (seg.length > 200) continue;
+    // Skip segments that start with Hebrew date patterns (gematria + month)
+    const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+    const datePattern = new RegExp(`^[א-ת]+['\"׳״]?[א-ת]*\\s*(${hebrewMonths})`);
+    if (datePattern.test(seg)) continue;
+    // This should be the rabbi name
+    rabbi_name = seg;
+    break;
   }
   
   // EXTRACTION STEP: Extract ALL ###...### patterns as tags BEFORE removing them
