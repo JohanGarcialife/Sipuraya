@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import ReaderNav from "@/features/reader/components/ReaderNav";
 import StoryCard from "@/features/reader/components/StoryCard";
+import SeriesRibbon from "@/features/reader/components/SeriesRibbon";
 import { useLanguage } from "@/features/reader/context/LanguageContext";
 
 type HebrewDate = {
@@ -136,6 +137,14 @@ export default function ReadPage() {
                 ? `${data.hebrewDate.displayHe} — ${t("common.checkTomorrow")}`
                 : `${data.hebrewDate.displayEn} — ${t("common.checkTomorrow")}`}
             </p>
+          </div>
+        )}
+
+        {/* Series Ribbons (Placeholder for Netflix Taxonomy) */}
+        {!loading && (
+          <div className="mt-12">
+             <SeriesRibbon seriesName="Netflix" title={isHe ? "סדרות מומלצות" : "Featured Series"} />
+             {/* Add more ribbons here as we identify series names */}
           </div>
         )}
 

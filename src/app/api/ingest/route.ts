@@ -167,101 +167,114 @@ function parseStoryBlock(block: string) {
     body: null,
     tags: [],           // Always start with empty array
     rabbi_name: null,   // NEW field
+    series: null,       // NEW field
     koteret: null       // Temp field for ###KOTERET extraction
   };
   
   let bodyBuffer: string[] = [];
   let tagsBuffer: string[] = [];
 
-  const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
-  const regexTitleEn = /###English Title:|English Title:|Title:/i;
-  const regexTitleHe = /###KOTERET:|###Hebrew Title:|KOTERET:|Hebrew Title:/i; 
-  // Simplified: Only ignore these EXACT patterns (using regex for precise matching)
-  const IGNORE_PATTERNS = [
-    /^###English Translation/i,
-    /^###Hebrew Translation/i,
-    /^Start of OCR/i,
-    /^End of OCR/i,
-    /^Screenshot for page/i
-  ];
+    const regexDate = /###Date:|###תאריך:|Date:|תאריך:/i;
+    const regexTitleEn = /###English Title:|English Title:|Title:/i;
+    const regexTitleHe = /###KOTERET:|###Hebrew Title:|KOTERET:|Hebrew Title:/i;
+    // NEW: Series / Netflix Title Regex
+    const regexSeries = /###Series:|###Netflix Title:|###Series Title:|Series:|Netflix Title:/i;
 
-  lines.forEach(line => {
-    let cleanLine = line.trim();
-    if (!cleanLine) return;
-
-    if (cleanLine.includes('Story ID') || /([A-Za-z]{2}\d+)/.test(cleanLine)) {
-        const foundId = smartFindId(cleanLine);
-        if (foundId) {
-            storyData.id = cleanId(foundId);
-            return; 
-        }
-    }
-
-    if (cleanLine.includes('###') || regexDate.test(cleanLine)) {
-        if (regexDate.test(cleanLine)) {
-            const rawDate = cleanLine.replace(/###|Date:|תאריך:/gi, '').trim(); 
-            const dayMatch = rawDate.match(/(\d+)/);
-            if (dayMatch) storyData.day = parseInt(dayMatch[1]);
-
-            const lowerDate = rawDate.toLowerCase();
-            for (const [monthName, index] of Object.entries(MONTH_MAP)) {
-                if (lowerDate.includes(monthName)) {
-                    storyData.month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-                    storyData.monthIndex = index;
-                    break; 
-                }
-            }
-            if (!storyData.month) {
-                const parts = rawDate.split(' ');
-                // Fix: Handle "1 of Adar" format - take the word AFTER "of"
-                if (parts.length > 2 && parts[1].toLowerCase() === 'of') {
-                    storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
-                } else if (parts.length > 1 && parts[1].toLowerCase() !== 'of') {
-                    storyData.month = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
-                } else if (parts.length > 2) {
-                    storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
-                }
-            }
-            return;
-        }
-        if (regexTitleEn.test(cleanLine)) {
-            storyData.title_en = cleanLine.replace(regexTitleEn, '').replace(/###/g, '').trim();
-            return;
-        }
-        if (regexTitleHe.test(cleanLine)) {
-            const heTitle = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
-            storyData.title_he = heTitle;
-            storyData.koteret = heTitle;  // Also save as koteret
-            return;
-        }
-
-        // NEW: Rabbi Extraction (ENGLISH ONLY - no Hebrew patterns)
-        const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
-        if (regexRabbi.test(cleanLine)) {
-            const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
-            console.log(`[Ingest] 🧩 parseStoryBlock found Rabbi line: "${cleanLine}" -> Extracted: "${rabbi}"`);
-            storyData.rabbi_name = rabbi;
-            return;
-        }
-        return; 
-    } 
-    
-    // EXTRACTION STEP: Extract tags from ### lines (not title/date/known patterns)
-    if (cleanLine.startsWith('###')) {
-      // Skip known metadata patterns that are NOT tags
-      if (!regexTitleEn.test(cleanLine) && 
-          !regexTitleHe.test(cleanLine) &&
-          !regexDate.test(cleanLine) &&
-          cleanLine !== '###NEW STORY' &&
-          !IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) {
-        // Extract tag content (remove ### delimiters)
-        const tag = cleanLine.replace(/^###|###$/g, '').trim();
-        if (tag && tag.length > 0) {
-          tagsBuffer.push(tag);
-        }
+    // Simplified: Only ignore these EXACT patterns (using regex for precise matching)
+    const IGNORE_PATTERNS = [
+      /^###English Translation/i,
+      /^###Hebrew Translation/i,
+      /^Start of OCR/i,
+      /^End of OCR/i,
+      /^Screenshot for page/i
+    ];
+  
+    lines.forEach(line => {
+      let cleanLine = line.trim();
+      if (!cleanLine) return;
+  
+      if (cleanLine.includes('Story ID') || /([A-Za-z]{2}\d+)/.test(cleanLine)) {
+          const foundId = smartFindId(cleanLine);
+          if (foundId) {
+              storyData.id = cleanId(foundId);
+              return; 
+          }
       }
-      return; // Don't add to body
-    }
+  
+      if (cleanLine.includes('###') || regexDate.test(cleanLine) || regexSeries.test(cleanLine)) {
+          if (regexDate.test(cleanLine)) {
+              const rawDate = cleanLine.replace(/###|Date:|תאריך:/gi, '').trim(); 
+              const dayMatch = rawDate.match(/(\d+)/);
+              if (dayMatch) storyData.day = parseInt(dayMatch[1]);
+  
+              const lowerDate = rawDate.toLowerCase();
+              for (const [monthName, index] of Object.entries(MONTH_MAP)) {
+                  if (lowerDate.includes(monthName)) {
+                      storyData.month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+                      storyData.monthIndex = index;
+                      break; 
+                  }
+              }
+              if (!storyData.month) {
+                  const parts = rawDate.split(' ');
+                  // Fix: Handle "1 of Adar" format - take the word AFTER "of"
+                  if (parts.length > 2 && parts[1].toLowerCase() === 'of') {
+                      storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
+                  } else if (parts.length > 1 && parts[1].toLowerCase() !== 'of') {
+                      storyData.month = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+                  } else if (parts.length > 2) {
+                      storyData.month = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
+                  }
+              }
+              return;
+          }
+          if (regexTitleEn.test(cleanLine)) {
+              storyData.title_en = cleanLine.replace(regexTitleEn, '').replace(/###/g, '').trim();
+              return;
+          }
+          if (regexTitleHe.test(cleanLine)) {
+              const heTitle = cleanLine.replace(regexTitleHe, '').replace(/###/g, '').trim();
+              storyData.title_he = heTitle;
+              storyData.koteret = heTitle;  // Also save as koteret
+              return;
+          }
+
+          // NEW: Series Extraction
+          if (regexSeries.test(cleanLine)) {
+              const series = cleanLine.replace(regexSeries, '').replace(/###/g, '').trim();
+              console.log(`[Ingest] 📺 Found Series: "${series}"`);
+              storyData.series = series;
+              return;
+          }
+  
+          // NEW: Rabbi Extraction (ENGLISH ONLY - no Hebrew patterns)
+          const regexRabbi = /###Rabbi:|### Rabbi:|Rabbi:/i;
+          if (regexRabbi.test(cleanLine)) {
+              const rabbi = cleanLine.replace(regexRabbi, '').replace(/###/g, '').trim();
+              console.log(`[Ingest] 🧩 parseStoryBlock found Rabbi line: "${cleanLine}" -> Extracted: "${rabbi}"`);
+              storyData.rabbi_name = rabbi;
+              return;
+          }
+          return; 
+      } 
+      
+      // EXTRACTION STEP: Extract tags from ### lines (not title/date/known patterns)
+      if (cleanLine.startsWith('###')) {
+        // Skip known metadata patterns that are NOT tags
+        if (!regexTitleEn.test(cleanLine) && 
+            !regexTitleHe.test(cleanLine) &&
+            !regexDate.test(cleanLine) &&
+            !regexSeries.test(cleanLine) && // Don't add series as a tag
+            cleanLine !== '###NEW STORY' &&
+            !IGNORE_PATTERNS.some(pattern => pattern.test(cleanLine))) {
+          // Extract tag content (remove ### delimiters)
+          const tag = cleanLine.replace(/^###|###$/g, '').trim();
+          if (tag && tag.length > 0) {
+            tagsBuffer.push(tag);
+          }
+        }
+        return; // Don't add to body
+      }
     
     // Also skip plain "NEW STORY" without ###
     if (cleanLine === 'NEW STORY' || cleanLine.includes('NEW STORY')) return;
@@ -531,6 +544,7 @@ export async function POST(req: NextRequest) {
           date_en: formatEnglishDate(day, month),              
           rabbi_he: null,                                      
           rabbi_en: data.rabbi_name,                          // REVERT: Back to direct assignment for debugging
+          series: data.series || null,                        // NEW field
           title_en: data.title_en,
           title_he: data.title_he || null,
           body_en: data.body,
@@ -640,12 +654,28 @@ export async function POST(req: NextRequest) {
     // Verify embedding generation is skipped if text is null
     const CONCURRENCY_LIMIT = 5;
     
+// Helper to remove Nikkud for better search matching
+function removeNikkud(text: string): string {
+  return text ? text.replace(/[\u0591-\u05C7]/g, "") : "";
+}
+
     for (let i = 0; i < finalArray.length; i += CONCURRENCY_LIMIT) {
         const chunk = finalArray.slice(i, i + CONCURRENCY_LIMIT);
         
         await Promise.all(chunk.map(async (story) => {
              // @ts-ignore
-             const textForAI = story.body_he || story.body_en;
+             // IMPROVED CONTEXT: Include Titles (Plain + No-Nikkud), Rabbi, Series, and Body
+             const cleanTitleHe = story.title_he ? removeNikkud(story.title_he) : "";
+             const cleanBodyHe = story.body_he ? removeNikkud(story.body_he) : "";
+             
+             const textForAI = `
+Title: ${story.title_en || ""} ${story.title_he || ""}
+Clean Title: ${cleanTitleHe}
+Rabbi: ${story.rabbi_en || ""} ${story.rabbi_he || ""}
+Series: ${story.series || ""}
+Body: ${story.body_en || ""} ${story.body_he || ""}
+Clean Body Search: ${cleanBodyHe}
+`.trim();
              
              // Ensure story has an ID before upserting
              if (!story.story_id) return;
@@ -672,6 +702,7 @@ export async function POST(req: NextRequest) {
                 // This ensures Hebrew text in rabbi_en gets replaced with correct English or null
                 upsertPayload.rabbi_en = story.rabbi_en;
                 upsertPayload.rabbi_he = story.rabbi_he;
+                if (story.series) upsertPayload.series = story.series; // NEW
                 if (story.tags && story.tags.length > 0) upsertPayload.tags = story.tags;
                 
                 // DEBUG: Log specific Payload for Upsert (Check for contamination)
