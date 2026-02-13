@@ -63,10 +63,13 @@ function parseHebrewStory(story) {
         if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
         if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
         if (/^(Date|תאריך)/i.test(seg)) continue;
+        if (seg === 'BIOGRAPHY') continue;
         if (seg.length > 200) continue;
         const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-        const datePattern = new RegExp(`^[א-ת]+['"׳״]?[א-ת]*\\s*(${hebrewMonths})`);
+        const datePattern = new RegExp(`^[א-ת]['"׳״][א-ת]?\\s+(${hebrewMonths})`);
         if (datePattern.test(seg)) continue;
+        const simpleDatePattern = new RegExp(`^[א-ת]['׳]\\s+(${hebrewMonths})`);
+        if (simpleDatePattern.test(seg)) continue;
         rabbi_name = seg;
         break;
     }

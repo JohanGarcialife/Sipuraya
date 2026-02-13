@@ -323,12 +323,18 @@ function parseHebrewStory(story) {
     if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
     if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
     if (/^(Date|תאריך)/i.test(seg)) continue;
+    // Skip exact "BIOGRAPHY" segment
+    if (seg === 'BIOGRAPHY') continue;
     // Skip segments that are too long (likely body text, not a name)
     if (seg.length > 200) continue;
-    // Skip segments that start with Hebrew date patterns (gematria + month)
+    // Skip segments that start with Hebrew date patterns (gematria letter + quote + space + month)
+    // e.g. "כ"ט אדר", "י"א אדר", "א' ניסן"
     const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-    const datePattern = new RegExp(`^[א-ת]+['\"׳״]?[א-ת]*\\s*(${hebrewMonths})`);
+    const datePattern = new RegExp(`^[א-ת]['"\'\"׳״][א-ת]?\\s+(${hebrewMonths})`);
     if (datePattern.test(seg)) continue;
+    // Also skip simple date like "א' אדר" or "ה ניסן"
+    const simpleDatePattern = new RegExp(`^[א-ת]['׳]\\s+(${hebrewMonths})`);
+    if (simpleDatePattern.test(seg)) continue;
     // This should be the rabbi name
     rabbi_name = seg;
     break;

@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import { Frank_Ruhl_Libre, Lora } from "next/font/google";
 import type { Metadata } from "next";
 import "./globals.css";
 import QueryProvider from "@/components/providers/QueryProvider";
@@ -14,9 +15,25 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const frankRuhlLibre = Frank_Ruhl_Libre({
+  variable: "--font-hebrew",
+  subsets: ["latin", "hebrew"],
+  weight: ["300", "400", "500", "700", "900"],
+  display: "swap",
+});
+
+const lora = Lora({
+  variable: "--font-serif-en",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Sipuraya Admin",
-  description: "Content management for Sipuraya",
+  title: "Sipuraya — Daily Stories from the Sages",
+  description:
+    "Discover timeless stories and teachings from the great rabbis and sages of Israel, one day at a time.",
 };
 
 export default function RootLayout({
@@ -25,9 +42,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${frankRuhlLibre.variable} ${lora.variable} antialiased`}
       >
         <QueryProvider>
           {children}

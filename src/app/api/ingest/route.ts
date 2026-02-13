@@ -36,6 +36,7 @@ const HEBREW_DAY_NUMBERS: Record<number, string> = {
   1: "א'", 2: "ב'", 3: "ג'", 4: "ד'", 5: "ה'",
   6: "ו'", 7: "ז'", 8: "ח'", 9: "ט'", 10: "י'",
   11: 'י"א', 12: 'י"ב', 13: 'י"ג', 14: 'י"ד', 15: 'ט"ו',
+  16: 'ט"ז', 17: 'י"ז', 18: 'י"ח', 19: 'י"ט', 20: "כ'",
   21: 'כ"א', 22: 'כ"ב', 23: 'כ"ג', 24: 'כ"ד', 25: 'כ"ה',
   26: 'כ"ו', 27: 'כ"ז', 28: 'כ"ח', 29: 'כ"ט', 30: "ל'"
 };
@@ -330,10 +331,13 @@ function parseHebrewStory(story: any) {
     if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
     if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
     if (/^(Date|תאריך)/i.test(seg)) continue;
+    if (seg === 'BIOGRAPHY') continue;
     if (seg.length > 200) continue;
     const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-    const datePattern = new RegExp(`^[א-ת]+['\"׳״]?[א-ת]*\\s*(${hebrewMonths})`);
+    const datePattern = new RegExp(`^[א-ת]['"׳״][א-ת]?\s+(${hebrewMonths})`);
     if (datePattern.test(seg)) continue;
+    const simpleDatePattern = new RegExp(`^[א-ת]['׳]\s+(${hebrewMonths})`);
+    if (simpleDatePattern.test(seg)) continue;
     rabbi_name = seg;
     break;
   }

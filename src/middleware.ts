@@ -1,6 +1,15 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Rutas públicas que NO requieren autenticación
+const PUBLIC_ROUTES = ["/read"];
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+}
+
 export async function middleware(req: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -60,16 +69,26 @@ export async function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
 
-  // If user is authenticated
+  // Root redirects to /read (public reader)
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/read", req.url));
+  }
+
+  // Public routes — allow without auth
+  if (isPublicRoute(pathname)) {
+    return response;
+  }
+
+  // Authenticated users
   if (session) {
-    if (pathname === "/" || pathname === "/login") {
+    if (pathname === "/login") {
       return NextResponse.redirect(new URL("/admin", req.url));
     }
     return response;
   }
 
-  // If user is not authenticated
-  if (pathname.startsWith("/admin") || pathname === "/") {
+  // Unauthenticated users trying to access protected routes
+  if (pathname.startsWith("/admin")) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

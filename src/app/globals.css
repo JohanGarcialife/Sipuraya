@@ -56,6 +56,14 @@
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+
+  /* Reader UI — warm gold accent */
+  --reader-accent: oklch(0.75 0.15 75);
+  --reader-accent-foreground: oklch(0.20 0.04 75);
+  --reader-bg: oklch(0.985 0.005 90);
+  --reader-surface: oklch(0.97 0.008 90);
+  --reader-text: oklch(0.25 0.02 90);
+  --reader-text-muted: oklch(0.55 0.01 90);
 }
 
 .dark {
@@ -109,6 +117,14 @@
   --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
   --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+
+  /* Reader UI — dark mode */
+  --reader-accent: oklch(0.78 0.14 75);
+  --reader-accent-foreground: oklch(0.15 0.03 75);
+  --reader-bg: oklch(0.18 0.005 90);
+  --reader-surface: oklch(0.22 0.008 90);
+  --reader-text: oklch(0.88 0.015 90);
+  --reader-text-muted: oklch(0.58 0.01 90);
 }
 
 @theme inline {
