@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "../context/LanguageContext";
+import { applyGeresh } from "@/lib/hebrewUtils";
 
 type StoryReaderProps = {
   title: string | null;
@@ -41,8 +42,13 @@ export default function StoryReader({
 
   const textAlignClass = isHe ? "text-right" : "text-left";
   const directionClass = isHe ? "rtl" : "ltr";
-  const fontFamilyStyle = {
+  // Frank Ruhl Libre for Hebrew titles
+  const titleFontStyle = {
     fontFamily: isHe ? "var(--font-hebrew), serif" : "var(--font-serif-en), serif",
+  };
+  // Assistant for Hebrew body/metadata
+  const bodyFontStyle = {
+    fontFamily: isHe ? "var(--font-hebrew-body), var(--font-hebrew), sans-serif" : "var(--font-serif-en), serif",
   };
 
   return (
@@ -64,13 +70,13 @@ export default function StoryReader({
         </p>
       )}
 
-      {/* Title */}
+      {/* Title — Frank Ruhl Libre */}
       <h1
-        className={`mb-4 text-3xl font-bold leading-tight text-[var(--reader-text)] sm:text-4xl md:text-5xl ${textAlignClass}`}
-        style={fontFamilyStyle}
+        className={`mb-4 text-3xl font-bold leading-tight text-(--reader-text) sm:text-4xl md:text-5xl ${textAlignClass}`}
+        style={titleFontStyle}
         dir={directionClass}
       >
-        {title}
+        {applyGeresh(title, isHe)}
       </h1>
 
       {/* Rabbi / Author */}
@@ -83,10 +89,10 @@ export default function StoryReader({
         >
           <div className="h-px flex-1 bg-linear-to-r from-transparent via-[var(--reader-border)] to-transparent opacity-50" />
           <p
-            className="text-lg font-medium text-[var(--reader-accent)]"
-            style={fontFamilyStyle}
+            className="text-lg font-medium text-(--reader-accent)"
+            style={bodyFontStyle}
           >
-            {isHe ? "מאת" : "By"} {rabbi}
+            {isHe ? "מאת" : "By"} {applyGeresh(rabbi, isHe)}
           </p>
           <div className="h-px flex-1 bg-linear-to-r from-transparent via-[var(--reader-border)] to-transparent opacity-50" />
         </div>
@@ -114,8 +120,8 @@ export default function StoryReader({
           return (
             <p
               key={index}
-              className={`mb-6 text-xl leading-relaxed text-[var(--reader-text)] sm:text-lg sm:leading-loose ${finalDropCapClass}`}
-              style={fontFamilyStyle}
+              className={`mb-6 text-xl leading-relaxed text-(--reader-text) sm:text-lg sm:leading-loose ${finalDropCapClass}`}
+              style={bodyFontStyle}
             >
               {paragraph}
             </p>

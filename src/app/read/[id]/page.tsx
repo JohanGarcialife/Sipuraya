@@ -41,7 +41,8 @@ export default function StoryPage() {
         const storyRes = await fetch(`/api/stories/${params.id}`);
         if (!storyRes.ok) throw new Error("Story not found");
         const storyData = await storyRes.json();
-        setStory(storyData);
+        // API returns { story: {...} }, so unwrap it
+        setStory(storyData.story ?? storyData);
 
         // Fetch Hebrew date
         const dateRes = await fetch("/api/hebrew-date");

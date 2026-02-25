@@ -49,3 +49,5 @@ scripts/data/*
 .env.local
 
 scripts/ready_to_upload.json
+
+/file

@@ -36,6 +36,7 @@ const translations = {
     "common.checkTomorrow": "בדוק שוב מחר",
     "common.errorLoading": "שגיאה בטעינת הסיפורים",
     "common.storyNotFound": "הסיפור לא נמצא",
+    "common.share": "שתף סיפור זה",
   },
   en: {
     // Chat / Passcode
@@ -60,6 +61,7 @@ const translations = {
     "common.checkTomorrow": "Check back tomorrow",
     "common.errorLoading": "Error loading stories",
     "common.storyNotFound": "Story not found",
+    "common.share": "Share this story",
   },
 };
 

@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Assistant } from "next/font/google";
 import { Frank_Ruhl_Libre, Lora } from "next/font/google";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -19,6 +19,13 @@ const frankRuhlLibre = Frank_Ruhl_Libre({
   variable: "--font-hebrew",
   subsets: ["latin", "hebrew"],
   weight: ["300", "400", "500", "700", "900"],
+  display: "swap",
+});
+
+const assistant = Assistant({
+  variable: "--font-hebrew-body",
+  subsets: ["latin", "hebrew"],
+  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -44,7 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${frankRuhlLibre.variable} ${lora.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${frankRuhlLibre.variable} ${assistant.variable} ${lora.variable} antialiased`}
       >
         <QueryProvider>
           {children}
