@@ -121,7 +121,7 @@ function SearchContent() {
 
   return (
     <>
-      <EmailGateModal isOpen={gateOpen} onSuccess={handleGateSuccess} />
+      <EmailGateModal isOpen={gateOpen} onSuccess={handleGateSuccess} onClose={() => setGateOpen(false)} />
       
       <main className="mx-auto max-w-4xl px-6 py-12 md:px-4 sm:px-3 animate-in fade-in duration-500">
         

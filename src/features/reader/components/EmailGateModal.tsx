@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 type EmailGateModalProps = {
   isOpen: boolean;
   onSuccess: () => void;
+  onClose?: () => void;
 };
 
-export default function EmailGateModal({ isOpen, onSuccess }: EmailGateModalProps) {
+export default function EmailGateModal({ isOpen, onSuccess, onClose }: EmailGateModalProps) {
   const { isHe } = useLanguage();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,17 @@ export default function EmailGateModal({ isOpen, onSuccess }: EmailGateModalProp
       >
         <div className="relative p-8 md:p-6 text-center">
           
+          {/* Close Button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className={`absolute top-4 ${isHe ? "left-4" : "right-4"} rounded-full p-2 text-(--reader-text-muted) transition-colors hover:bg-(--reader-accent)/10 hover:text-(--reader-accent)`}
+              aria-label={isHe ? "סגור" : "Close"}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-(--reader-accent)/10 text-(--reader-accent)">
             <Mail className="h-8 w-8" strokeWidth={1.5} />
           </div>

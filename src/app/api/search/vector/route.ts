@@ -22,25 +22,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    // 1. Generate Embedding
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: query.replace(/\n/g, " "),
-      dimensions: 1536
-    });
+    // 1. First, check for exact/partial text matches (for Rabbi names or exact titles)
+    // We use parallel queries instead of .or() to avoid PostgREST syntax errors with quotes/commas in the query
+    const safeIlike = `%${query}%`;
+    const [rabbiEn, rabbiHe, titleEn, titleHe] = await Promise.all([
+      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).eq("rabbi_en", query).limit(5),
+      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).eq("rabbi_he", query).limit(5),
+      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).ilike("title_en", safeIlike).limit(5),
+      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).ilike("title_he", safeIlike).limit(5)
+    ]);
 
-    const embedding = embeddingResponse.data[0].embedding;
+    const combined = [...(rabbiEn.data||[]), ...(rabbiHe.data||[]), ...(titleEn.data||[]), ...(titleHe.data||[])];
+    // Deduplicate by story_id
+    let stories = Array.from(new Map(combined.map(s => [s.story_id, s])).values());
 
-    // 2. Query Supabase (match_documents)
-    const { data: stories, error } = await supabase.rpc("match_documents", {
-      query_embedding: embedding,
-      match_threshold: 0.5, // Adjust threshold as needed
-      match_count: 5        // Limit results
-    });
+    // 2. If no direct text matches, fallback to Vector Search
+    if (stories.length === 0) {
+      const embeddingResponse = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: query.replace(/\n/g, " "),
+        dimensions: 1536
+      });
 
-    if (error) {
-      console.error("Supabase vector search error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      const embedding = embeddingResponse.data[0].embedding;
+
+      const { data: vectorStories, error } = await supabase.rpc("match_documents", {
+        query_embedding: embedding,
+        match_threshold: 0.5, // Adjust threshold as needed
+        match_count: 5        // Limit results
+      });
+
+      if (error) {
+        console.error("Supabase vector search error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      stories = vectorStories || [];
     }
 
     // 3. Format Context for LLM
