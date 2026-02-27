@@ -13,18 +13,43 @@ const supabase = createClient(
  */
 export async function GET() {
   try {
-    const { data: stories, error } = await supabase
+    // 1. Fetch manually curated "new" stories
+    const { data: taggedStories, error: tagError } = await supabase
       .from("stories")
       .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en")
       .eq("is_published", true)
-      .order("created_at", { ascending: false })
+      .contains("tags", ["new"])
       .limit(20);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (tagError) throw tagError;
+
+    const curatedCount = taggedStories?.length || 0;
+    
+    let combinedStories = [...(taggedStories || [])];
+
+    // 2. Format list of already fetched IDs to exclude them from the fallback query
+    const excludeIds = combinedStories.map((s) => s.story_id);
+
+    // 3. If we don't have 20 curated ones, fill the rest with latest ingested stories
+    if (curatedCount < 20) {
+      let query = supabase
+        .from("stories")
+        .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(20 - curatedCount);
+
+      if (excludeIds.length > 0) {
+        query = query.not("story_id", "in", `(${excludeIds.join(",")})`);
+      }
+
+      const { data: latestStories, error: latestError } = await query;
+      if (latestError) throw latestError;
+
+      combinedStories = [...combinedStories, ...(latestStories || [])];
     }
 
-    return NextResponse.json({ stories });
+    return NextResponse.json({ stories: combinedStories });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/features/reader/context/LanguageContext";
 
 interface HeroSectionProps {
@@ -14,6 +14,28 @@ export default function HeroSection({ totalStories }: HeroSectionProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [surpriseLoading, setSurpriseLoading] = useState(false);
+  const [heroMedia, setHeroMedia] = useState<{type: "image"|"video", url: string}>({
+    type: "image",
+    url: "/heroImage.jpeg"
+  });
+
+  // Fetch dynamic hero media from settings
+  useEffect(() => {
+    async function fetchHeroMedia() {
+      try {
+        const res = await fetch("/api/settings?key=hero_media");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.value) {
+            setHeroMedia(data.value);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch dynamic hero media:", err);
+      }
+    }
+    fetchHeroMedia();
+  }, []);
 
   const dir = isHe ? "rtl" : "ltr";
   const hebrewFont = { fontFamily: "var(--font-hebrew), serif" };
@@ -39,16 +61,27 @@ export default function HeroSection({ totalStories }: HeroSectionProps) {
 
   return (
     <section className="relative w-full overflow-hidden" style={{ minHeight: "420px" }}>
-      {/* Background Hero Image */}
+      {/* Background Hero Media */}
       <div className="absolute inset-0">
-        <Image
-          src="/heroImage.jpeg"
-          alt="Purim celebration — Sipuraya"
-          fill
-          priority
-          className="object-cover object-center"
-          sizes="100vw"
-        />
+        {heroMedia.type === "video" ? (
+          <video
+            src={heroMedia.url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-full w-full object-cover object-center"
+          />
+        ) : (
+          <Image
+            src={heroMedia.url}
+            alt="Hero background — Sipuraya"
+            fill
+            priority
+            className="object-cover object-center"
+            sizes="100vw"
+          />
+        )}
         {/* Gradient overlay — bottom-heavy for text readability */}
         <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/40 to-black/10" />
       </div>

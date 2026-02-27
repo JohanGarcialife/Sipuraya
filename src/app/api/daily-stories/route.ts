@@ -49,12 +49,22 @@ export async function GET(request: Request) {
     const dateResult = await fetchHebrewDate();
     const { displayEn } = dateResult.hebrewDate;
 
-    // 2. Query all stories matching today's Hebrew date
-    const { data: stories, error } = await supabase
+    // 2. Query manually curated 'today' tag first
+    const { data: taggedStories } = await supabase
       .from("stories")
-      .select(
-        "story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags"
-      )
+      .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags")
+      .eq("is_published", true)
+      .contains("tags", ["today"])
+      .limit(count);
+
+    let selected = [...(taggedStories || [])];
+    const excludeIds = selected.map((s) => s.story_id);
+
+    // 3. Query all stories matching today's Hebrew date (for total count and filling remainders)
+    const { data: dateStories, error } = await supabase
+      .from("stories")
+      .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags")
+      .eq("is_published", true)
       .eq("date_en", displayEn);
 
     if (error) {
@@ -65,14 +75,19 @@ export async function GET(request: Request) {
       );
     }
 
-    // 3. Shuffle and pick `count` random stories
-    const shuffled = shuffle(stories || []);
-    const selected = shuffled.slice(0, count);
+    // 4. Fill remaining slots if curated ones didn't hit 'count'
+    if (selected.length < count) {
+      const remainingPool = (dateStories || []).filter(
+        (s) => !excludeIds.includes(s.story_id)
+      );
+      const shuffled = shuffle(remainingPool);
+      selected = [...selected, ...shuffled.slice(0, count - selected.length)];
+    }
 
     return NextResponse.json({
       stories: selected,
       hebrewDate: dateResult.hebrewDate,
-      totalForToday: stories?.length || 0,
+      totalForToday: dateStories?.length || 0,
       afterSunset: dateResult.afterSunset,
     });
   } catch (error) {

@@ -17,6 +17,7 @@ type Story = {
   body_en: string | null;
   date_he?: string;
   date_en?: string;
+  likes_count: number;
 };
 
 type HebrewDate = {
@@ -114,10 +115,12 @@ export default function StoryPage() {
         {/* Story */}
         {!loading && !error && story && (
           <StoryReader
+            storyId={story.story_id}
             title={isHe ? story.title_he : story.title_en}
             rabbi={isHe ? story.rabbi_he : story.rabbi_en}
             body={isHe ? story.body_he : story.body_en}
             date={isHe ? story.date_he : story.date_en}
+            initialLikes={story.likes_count}
           />
         )}
       </main>

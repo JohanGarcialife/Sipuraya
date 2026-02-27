@@ -4,6 +4,7 @@ import LanguageToggle from "./LanguageToggle";
 import HebrewDateBadge from "./HebrewDateBadge";
 import ThemeToggle from "./ThemeToggle";
 import { useLanguage } from "../context/LanguageContext";
+import Link from "next/link";
 
 type ReaderNavProps = {
   dayHe?: string;
@@ -22,7 +23,7 @@ export default function ReaderNav({
     <nav className="sticky top-0 z-50 border-b border-border bg-[color-mix(in_oklch,var(--reader-bg)_85%,transparent)] backdrop-blur-md pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-[900px] items-center justify-between px-6 py-3 md:px-4 md:py-2.5 sm:px-3 sm:py-2">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <Link href="/read" className="flex items-center gap-2">
           <span
             className="text-2xl font-bold tracking-wide text-[var(--reader-accent)] md:text-xl sm:text-lg"
             style={{ fontFamily: "var(--font-hebrew), serif" }}
@@ -35,7 +36,7 @@ export default function ReaderNav({
           >
             Sipuraya
           </span>
-        </div>
+        </Link>
 
         {/* Hebrew date */}
         <div className="flex items-center gap-3">
@@ -44,10 +45,19 @@ export default function ReaderNav({
           )}
         </div>
 
-        {/* Language toggle + Theme toggle */}
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <LanguageToggle language={language} onToggle={setLanguage} />
+        {/* Language toggle + Theme toggle + About */}
+        <div className="flex items-center gap-4">
+          <Link
+            href="/about"
+            className="text-sm font-medium text-(--reader-text-muted) transition-colors hover:text-(--reader-accent) hidden md:block"
+            style={{ fontFamily: "var(--font-hebrew-body), sans-serif" }}
+          >
+            {language === "he" ? "אודות" : "About"}
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LanguageToggle language={language} onToggle={setLanguage} />
+          </div>
         </div>
       </div>
     </nav>
