@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// Initialize Stripe. Uses a dummy key if env var is missing during build/dev
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
-  apiVersion: "2025-02-24.acacia" as any,
-});
-
 export async function POST(req: NextRequest) {
   try {
+    // Initialize inside the handler to guarantee runtime env variable evaluation
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-02-24.acacia" as any,
+    });
+    
     const { email } = await req.json();
 
     if (!email) {

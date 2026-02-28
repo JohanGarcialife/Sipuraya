@@ -69,10 +69,29 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>("he");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("sipuraya_lang") as Language;
+    if (stored === "en" || stored === "he") {
+      setLanguage(stored);
+    }
+    setMounted(true);
+  }, []);
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("sipuraya_lang", lang);
+    }
+  };
 
   const toggleLanguage = () => {
-    setLanguage((prev) => (prev === "he" ? "en" : "he"));
+    handleSetLanguage(language === "he" ? "en" : "he");
   };
+
+  // Skip rendering children until we synced with localStorage to avoid hydration mismatch
+  if (!mounted) return null;
 
   const isHe = language === "he";
 
@@ -85,7 +104,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     <LanguageContext.Provider
       value={{
         language,
-        setLanguage,
+        setLanguage: handleSetLanguage,
         toggleLanguage,
         isHe,
         t,

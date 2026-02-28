@@ -5,6 +5,9 @@ import "./globals.css";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/features/reader/context/AuthContext";
+import { ThemeProvider } from "next-themes";
+import { LanguageProvider } from "@/features/reader/context/LanguageContext";
+import { ChatProvider } from "@/features/chat/context/ChatContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,12 +57,18 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${frankRuhlLibre.variable} ${assistant.variable} ${lora.variable} antialiased`}
       >
-        <AuthProvider>
-          <QueryProvider>
-            {children}
-            <Toaster />
-          </QueryProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <LanguageProvider>
+            <AuthProvider>
+              <QueryProvider>
+                <ChatProvider>
+                  {children}
+                  <Toaster />
+                </ChatProvider>
+              </QueryProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
