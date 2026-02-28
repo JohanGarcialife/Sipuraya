@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useLanguage } from "@/features/reader/context/LanguageContext";
 import { X, Loader2, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,10 +19,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mounted, setMounted] = useState(false);
   
   const supabase = createSupabaseBrowserClient();
 
-  if (!isOpen) return null;
+  useEffect(() => setMounted(true), []);
+
+  if (!isOpen || !mounted) return null;
 
   const dir = isHe ? "rtl" : "ltr";
   const fontFamilyBody = isHe ? "var(--font-hebrew-body)" : "var(--font-serif-en)";
@@ -62,8 +66,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm animate-in fade-in duration-300">
+  return createPortal(
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm animate-in fade-in duration-300">
       <div 
         className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-(--reader-surface) shadow-2xl animate-in zoom-in-95 duration-300"
         dir={dir}
@@ -161,6 +165,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
