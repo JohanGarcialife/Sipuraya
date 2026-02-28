@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Copy, Share2, Heart } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 import { applyGeresh } from "@/lib/hebrewUtils";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PremiumGateModal from "./PremiumGateModal";
 
 type StoryReaderProps = {
   storyId: string;
@@ -42,6 +45,7 @@ export default function StoryReader({
   date,
   initialLikes = 0,
 }: StoryReaderProps) {
+  const router = useRouter();
   const { isHe, t } = useLanguage();
   const [hasLiked, setHasLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(initialLikes);
@@ -61,6 +65,59 @@ export default function StoryReader({
       console.error("Failed to like story", err);
     }
   };
+
+  // --- Monetization: Daily Tracker ---
+  const { user } = useAuth();
+  const [showPremiumGate, setShowPremiumGate] = useState(false);
+
+  useEffect(() => {
+    // If the user is logged in, they are considered Premium (Unlimited Access)
+    if (user) return;
+    
+    // Basic premium check (in future: connect to user session)
+    const isPremium = localStorage.getItem("sipuraya_is_premium") === "true";
+    if (isPremium) return;
+
+    try {
+      const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const trackerObj = JSON.parse(localStorage.getItem("sipuraya_daily_views") || "{}");
+      
+      let viewsToday: string[] = [];
+
+      if (trackerObj.date === today && Array.isArray(trackerObj.story_ids)) {
+        viewsToday = trackerObj.story_ids;
+      }
+
+      // If they haven't viewed this story today
+      if (!viewsToday.includes(storyId)) {
+        // Enforce Limit (Max 2 free stories/day)
+        if (viewsToday.length >= 2) {
+          setShowPremiumGate(true);
+          return; // Stop here, do not record this view
+        }
+        
+        // Add to tracking
+        viewsToday.push(storyId);
+      }
+
+      // Save back to local storage
+      localStorage.setItem("sipuraya_daily_views", JSON.stringify({
+        date: today,
+        story_ids: viewsToday
+      }));
+
+    } catch (err) {
+      console.error("Error with daily tracker", err);
+    }
+  }, [storyId]);
+
+  if (showPremiumGate) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+        <PremiumGateModal isOpen={true} onClose={() => router.push("/read")} />
+      </div>
+    );
+  }
 
   const paragraphs = splitParagraphs(body);
   const { dayHe, monthHe } = date && isHe ? parseDateHe(date) : { dayHe: "", monthHe: "" };

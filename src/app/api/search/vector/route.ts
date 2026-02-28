@@ -22,21 +22,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    // 1. First, check for exact/partial text matches (for Rabbi names or exact titles)
-    // We use parallel queries instead of .or() to avoid PostgREST syntax errors with quotes/commas in the query
-    const safeIlike = `%${query}%`;
-    const [rabbiEn, rabbiHe, titleEn, titleHe] = await Promise.all([
-      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).eq("rabbi_en", query).limit(5),
-      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).eq("rabbi_he", query).limit(5),
-      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).ilike("title_en", safeIlike).limit(5),
-      supabase.from("stories").select("story_id, title_he, title_en, rabbi_he, rabbi_en, date_he, date_en, body_he, body_en").eq("is_published", true).ilike("title_he", safeIlike).limit(5)
-    ]);
+    // 1. First, check for fuzzy/text matches across titles, rabbis, and body content
+    // This utilizes the custom 'text_search_stories' RPC with pg_trgm for typo tolerance
+    const { data: textStories, error: textError } = await supabase.rpc("text_search_stories", {
+      search_term: query,
+      match_limit: 5
+    });
 
-    const combined = [...(rabbiEn.data||[]), ...(rabbiHe.data||[]), ...(titleEn.data||[]), ...(titleHe.data||[])];
-    // Deduplicate by story_id
-    let stories = Array.from(new Map(combined.map(s => [s.story_id, s])).values());
+    if (textError) {
+      console.warn("Fuzzy text search failed, possibly missing RPC. Falling back to vector search.", textError);
+    }
 
-    // 2. If no direct text matches, fallback to Vector Search
+    let stories = textStories || [];
+
+    // 2. If no direct text/fuzzy matches, fallback to Semantic Vector Search
     if (stories.length === 0) {
       const embeddingResponse = await openai.embeddings.create({
         model: "text-embedding-3-small",

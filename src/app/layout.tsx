@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/features/reader/context/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,10 +54,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${frankRuhlLibre.variable} ${assistant.variable} ${lora.variable} antialiased`}
       >
-        <QueryProvider>
-          {children}
-          <Toaster />
-        </QueryProvider>
+        <AuthProvider>
+          <QueryProvider>
+            {children}
+            <Toaster />
+          </QueryProvider>
+        </AuthProvider>
       </body>
     </html>
   );
