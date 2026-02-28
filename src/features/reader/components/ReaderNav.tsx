@@ -9,7 +9,7 @@ import { useState } from "react";
 import Link from "next/link";
 import AuthModal from "./AuthModal";
 import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
-import { UserCircle, LogOut } from "lucide-react";
+import { UserCircle } from "lucide-react";
 
 type ReaderNavProps = {
   dayHe?: string;
@@ -26,10 +26,6 @@ export default function ReaderNav({
   const { user, isLoading } = useAuth();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const supabase = createSupabaseBrowserClient();
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-[color-mix(in_oklch,var(--reader-bg)_85%,transparent)] backdrop-blur-md pt-[env(safe-area-inset-top)]">
@@ -68,13 +64,13 @@ export default function ReaderNav({
           </Link>
           <div className="flex items-center gap-2">
             {!isLoading && user ? (
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-1 rounded-full p-2 text-sm font-medium text-(--reader-text-muted) transition-colors hover:bg-rose-500/10 hover:text-rose-500"
-                title={language === "he" ? "התנתק" : "Sign Out"}
+              <Link
+                href="/profile"
+                className="flex items-center gap-1 rounded-full p-2 text-sm font-medium text-(--reader-text-muted) transition-colors hover:bg-(--reader-accent)/10 hover:text-(--reader-accent)"
+                title={language === "he" ? "הפרופיל שלי" : "My Profile"}
               >
-                <LogOut className="h-5 w-5" />
-              </button>
+                <UserCircle className="h-5 w-5" />
+              </Link>
             ) : (
               <button
                  onClick={() => setIsAuthOpen(true)}
