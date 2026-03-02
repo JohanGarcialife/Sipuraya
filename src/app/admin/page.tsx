@@ -107,12 +107,12 @@ export default function AdminDashboard() {
           // For AND logic with Supabase, we need to chain .or() calls
           // Each word must appear in at least one column
           words.forEach(word => {
-            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
           });
         }
         // 3. SINGLE WORD: Search across all columns (OR logic)
         else {
-          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
         }
       }
 
