@@ -90,11 +90,11 @@ export default function StoryReader({
 
       // If they haven't viewed this story today
       if (!viewsToday.includes(storyId)) {
-        // Enforce Limit (Max 2 free stories/day)
-        if (viewsToday.length >= 2) {
-          setShowPremiumGate(true);
-          return; // Stop here, do not record this view
-        }
+        // Enforce Limit (Max 2 free stories/day) -> TEMPORARILY DISABLED PER CLIENT
+        // if (viewsToday.length >= 2) {
+        //   setShowPremiumGate(true);
+        //   return; // Stop here, do not record this view
+        // }
         
         // Add to tracking
         viewsToday.push(storyId);

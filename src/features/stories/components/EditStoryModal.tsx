@@ -112,6 +112,14 @@ export default function EditStoryModal({
             <div className="grid grid-cols-2 gap-4">
               {/* Dates */}
               <div className="space-y-2">
+                <Label>English Date (e.g., 1 Adar)</Label>
+                <Input
+                  value={formData.date_en}
+                  onChange={(e) => handleChange("date_en", e.target.value)}
+                  placeholder="1 Adar"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Hebrew Date (e.g., א' אדר)</Label>
                 <Input
                   value={formData.date_he}
@@ -120,16 +128,16 @@ export default function EditStoryModal({
                   dir="rtl"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>English Date (e.g., 1 Adar)</Label>
-                <Input
-                  value={formData.date_en}
-                  onChange={(e) => handleChange("date_en", e.target.value)}
-                  placeholder="1 Adar"
-                />
-              </div>
               
               {/* Rabbi Names */}
+              <div className="space-y-2">
+                <Label>Rabbi Name (English)</Label>
+                <Input
+                  value={formData.rabbi_en}
+                  onChange={(e) => handleChange("rabbi_en", e.target.value)}
+                  placeholder="Rabbi Shlomo ben Masud"
+                />
+              </div>
               <div className="space-y-2">
                 <Label>Rabbi Name (Hebrew)</Label>
                 <Input
@@ -137,14 +145,6 @@ export default function EditStoryModal({
                   onChange={(e) => handleChange("rabbi_he", e.target.value)}
                   placeholder="רבי שלמה בן מסעוד"
                   dir="rtl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Rabbi Name (English)</Label>
-                <Input
-                  value={formData.rabbi_en}
-                  onChange={(e) => handleChange("rabbi_en", e.target.value)}
-                  placeholder="Rabbi Shlomo ben Masud"
                 />
               </div>
             </div>

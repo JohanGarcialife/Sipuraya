@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [exactMatch, setExactMatch] = useState(false);
   
   // Month Filter State
   const [monthFilter, setMonthFilter] = useState("");
@@ -100,8 +101,8 @@ export default function AdminDashboard() {
           // Exact match in story_id column only
           query = query.eq('story_id', normalizedId);
         } 
-        // 2. MULTI-WORD SEARCH: Use AND logic (all words must be present)
-        else if (term.includes(' ')) {
+        // 2. MULTI-WORD SEARCH: Use AND logic (all words must be present) unless exactMatch is checked
+        else if (term.includes(' ') && !exactMatch) {
           const words = term.split(/\s+/).filter(w => w.length > 0);
           
           // For AND logic with Supabase, we need to chain .or() calls
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
             query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
           });
         }
-        // 3. SINGLE WORD: Search across all columns (OR logic)
+        // 3. SINGLE WORD OR EXACT PHRASE: Search across all columns (OR logic)
         else {
           query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
         }
@@ -132,7 +133,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchTerm, monthFilter, sortCol, sortAsc]);
+  }, [page, searchTerm, exactMatch, monthFilter, sortCol, sortAsc]);
 
   useEffect(() => {
     fetchStories();
@@ -222,13 +223,24 @@ export default function AdminDashboard() {
             <option value="Shevat">Shevat / שבט</option>
             <option value="Adar">Adar / אדר</option>
           </select>
-          <Input 
-            placeholder="Search in Title, Body, or ID..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="bg-white"
-          />
+          <div className="flex items-center gap-2">
+            <Input 
+              placeholder="Search in Title, Body, or ID..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="bg-white min-w-[250px]"
+            />
+            <label className="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap bg-white border border-gray-200 px-3 py-2 rounded-md">
+              <input 
+                type="checkbox" 
+                checked={exactMatch} 
+                onChange={(e) => setExactMatch(e.target.checked)} 
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              Exact Phrase
+            </label>
+          </div>
           <Button variant="secondary" onClick={handleSearch}>
               <Search className="h-4 w-4" />
           </Button>

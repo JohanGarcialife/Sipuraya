@@ -369,12 +369,10 @@ function parseHebrewStory(story: any) {
     }
   }
   
-  // Cleaning
-  content = content.replace(/###[^#]+###/g, '');
-  content = content.replace(/###NEW STORY/gi, '');
-  content = content.replace(/###[^\u05d0-\u05ea]*([א-ת'])/g, '$1');
+  // Cleaning tags and system lines
+  content = content.replace(/###[^#]+###/g, ''); // Remove inline tags
+  content = content.replace(/###.*$/gm, ''); // Remove any remaining ### lines
   content = content.replace(/NEW STORY/gi, '');
-  content = content.replace(/###/g, '');
   
   content = content.trim();
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
@@ -408,7 +406,8 @@ function parseHebrewStory(story: any) {
 
   content = content.replace(dateMarkerPattern, '');
     
-  const body = content.replace(/\s+/g, ' ').trim();
+  // Preserve newlines, but clean up double spaces and excessive line breaks
+  const body = content.replace(/[ \t\r]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
   
   // Extract day and month from story.id (e.g., "Ad0001" -> day=1, month="Adar")
   let day = 1;
