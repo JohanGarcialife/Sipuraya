@@ -255,14 +255,14 @@ export default function AdminDashboard() {
               <TableHead onClick={() => handleSort('story_id')} className="cursor-pointer hover:bg-gray-100 w-[100px]">
                   <div className="flex items-center gap-1">ID <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead onClick={() => handleSort('date_he')} className="cursor-pointer hover:bg-gray-100 w-[130px]">
-                  <div className="flex items-center gap-1">Hebrew Date <ArrowUpDown className="h-3 w-3" /></div>
-              </TableHead>
               <TableHead onClick={() => handleSort('date_en')} className="cursor-pointer hover:bg-gray-100 w-[130px]">
                   <div className="flex items-center gap-1">English Date <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
-              <TableHead className="w-[150px] text-right" dir="rtl">Rabbi (HE)</TableHead>
+              <TableHead onClick={() => handleSort('date_he')} className="cursor-pointer hover:bg-gray-100 w-[130px]">
+                  <div className="flex items-center gap-1">Hebrew Date <ArrowUpDown className="h-3 w-3" /></div>
+              </TableHead>
               <TableHead className="w-[150px]">Rabbi (EN)</TableHead>
+              <TableHead className="w-[150px] text-right" dir="rtl">Rabbi (HE)</TableHead>
               <TableHead onClick={() => handleSort('title_en')} className="cursor-pointer hover:bg-gray-100 w-[25%]">
                   <div className="flex items-center gap-1">Title (EN) <ArrowUpDown className="h-3 w-3" /></div>
               </TableHead>
@@ -286,16 +286,16 @@ export default function AdminDashboard() {
                 stories.map((story) => (
                 <TableRow key={story.story_id} className="hover:bg-blue-50/30">
                     <TableCell className="font-mono text-xs">{story.story_id}</TableCell>
-                    <TableCell className="font-serif text-lg" dir="rtl">{story.date_he}</TableCell>
                     <TableCell className="font-medium">{story.date_en}</TableCell>
-                    <TableCell className="text-right font-serif text-lg" dir="rtl">
-                        <div className="max-w-[200px] truncate ml-auto">
-                            {story.rabbi_he || <span className="text-gray-400 text-sm">—</span>}
-                        </div>
-                    </TableCell>
+                    <TableCell className="font-serif text-lg" dir="rtl">{story.date_he}</TableCell>
                     <TableCell className="font-medium">
                         <div className="max-w-[200px] truncate">
                             {story.rabbi_en || <span className="text-gray-400 text-sm">—</span>}
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-right font-serif text-lg" dir="rtl">
+                        <div className="max-w-[200px] truncate ml-auto">
+                            {story.rabbi_he || <span className="text-gray-400 text-sm">—</span>}
                         </div>
                     </TableCell>
                     <TableCell>
