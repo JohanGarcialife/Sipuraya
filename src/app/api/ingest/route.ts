@@ -324,129 +324,129 @@ function splitHebrewStories(text: string) {
   return stories;
 }
 
-// --- PARSE HEBREW STORY CONTENT (Ported from zipper.js) ---
+// --- PARSE HEBREW STORY CONTENT ---
 function parseHebrewStory(story: any) {
-  let content = story.content;
+  const rawContent = story.content;
   const tags: string[] = [];
-  let rabbi_name = null;
-  
-  // Remove the ID tag at the beginning (Generalized)
-  content = content.replace(/#סיפור_מספר:\s*[A-Za-z]{2}\d+/i, '');
-  
-  // Remove ###NEW STORY
-  content = content.replace(/###NEW STORY/gi, '');
-  
-  // EXTRACT RABBI NAME using split approach
-  // Format: ###KOTERET: title###rabbi_name###date_body...
-  // The rabbi name segment contains " quotes which breaks regex ###([^#]+)### matching.
-  const segments = content.split('###').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-  for (const seg of segments) {
-    if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
-    if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
-    if (/^(Date|תאריך)/i.test(seg)) continue;
-    if (seg === 'BIOGRAPHY') continue;
-    if (seg.length > 200) continue;
-    const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-    const datePattern = new RegExp(`^[א-ת]['"׳״][א-ת]?\s+(${hebrewMonths})`);
-    if (datePattern.test(seg)) continue;
-    const simpleDatePattern = new RegExp(`^[א-ת]['׳]\s+(${hebrewMonths})`);
-    if (simpleDatePattern.test(seg)) continue;
-    rabbi_name = seg;
-    break;
-  }
-  
-  // Tags extraction
-  const tagPattern = /###([^#\n]+)###/g;
-  let match;
-  while ((match = tagPattern.exec(content)) !== null) {
-    const tag = match[1].trim();
-    if (tag && 
-        tag !== 'NEW STORY' &&
-        !tag.match(/^English Translation/i) &&
-        !tag.match(/^Hebrew Translation/i) &&
-        tag !== rabbi_name) {
-      tags.push(tag);
-    }
-  }
-  
-  // Cleaning tags and system lines
-  content = content.replace(/###[^#]+###/g, ''); // Remove inline tags
-  content = content.replace(/###.*$/gm, ''); // Remove any remaining ### lines
-  content = content.replace(/NEW STORY/gi, '');
-  
-  content = content.trim();
-  const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
-  const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
-  
-  // Extract date from content if present
+  let rabbi_name: string | null = null;
   let parsedDay = 1;
   let parsedMonth = 'Adar';
   let dateFound = false;
+  const bodyLines: string[] = [];
 
-  const dateMatch = content.match(dateMarkerPattern);
-  if (dateMatch) {
-      const dayStr = dateMatch[1].replace(/['"׳״]/g, ''); // Remove quotes
-      const monthStr = dateMatch[2];
-      
-      // Parse day from Gematria
-      if (GEMATRIA_MAP[dayStr]) {
-          parsedDay = GEMATRIA_MAP[dayStr];
-      }
-      
-      // Map Hebrew month to English
-      for (const [eng, heb] of Object.entries(HEBREW_MONTH_NAMES)) {
-          if (heb === monthStr || monthStr.includes(heb)) {
-              parsedMonth = eng;
-              break;
-          }
-      }
-      dateFound = true;
-      console.log(`[Ingest] 📅 Extracted Hebrew date: ${dayStr} (${parsedDay}) ${monthStr} -> ${parsedMonth}`);
+  const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
+  const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
+
+  // Helper: is this a metadata/system line that should NOT appear in the body?
+  function isMetaLine(line: string): boolean {
+    const t = line.trim();
+    // Any line starting with # (covers #סיפור_מספר, ###KOTERET, ###TAG###, etc.)
+    if (t.startsWith('#')) return true;
+    // Bare keyword lines
+    if (/^(NEW STORY|KOTERET|BIOGRAPHY|English Translation|Hebrew Translation)/i.test(t)) return true;
+    return false;
   }
 
-  content = content.replace(dateMarkerPattern, '');
-    
-  // Preserve newlines, but clean up double spaces and excessive line breaks
-  const body = content.replace(/[ \t\r]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
-  
-  // Extract day and month from story.id (e.g., "Ad0001" -> day=1, month="Adar")
-  let day = 1;
-  let month = 'Adar';
-  if (story.id) {
-    const match = story.id.match(/([A-Za-z]+)(\d+)/);
-    if (match) {
-      const monthCode = match[1];
-      const dayNum = parseInt(match[2], 10);
-      
-      // Use parsed date if found, otherwise fallback to ID-based (which is often wrong for day)
-      // For month, ID-based prefix (Ni, Ad) is usually reliable for the Month, but Day is NOT reliable from ID.
-      if (dateFound) {
-          day = parsedDay;
-          month = parsedMonth; // Prefer parsed month too
-      } else {
-          // Fallback to ID-based logic (Legacy/Last Resort)
-          day = dayNum; // This was the bug for Ni0070 -> Day 70
+  // Process line by line
+  const lines = rawContent.split('\n');
+  for (const rawLine of lines) {
+    const t = rawLine.trim();
+
+    if (isMetaLine(t)) {
+      // Extract any inline tags (###TAG###) that may be embedded in the metadata line
+      const inlineTagPattern = /###([^#\n]{1,60})###/g;
+      let m;
+      while ((m = inlineTagPattern.exec(t)) !== null) {
+        const tag = m[1].trim();
+        if (tag && tag !== 'NEW STORY' && !/^(KOTERET|BIOGRAPHY|English|Hebrew)/i.test(tag)) {
+          tags.push(tag);
+        }
       }
-      // Map month code to full name (simplified - zipper.js has full mapping)
+      // Skip this line entirely — it must not go into body
+      continue;
+    }
+
+    // Skip blank lines at the very beginning (before any body content)
+    if (!t && bodyLines.every(l => l.trim() === '')) {
+      continue;
+    }
+
+    // --- Date Detection ---
+    if (!dateFound && dateMarkerPattern.test(t)) {
+      const dateMatch = t.match(dateMarkerPattern);
+      if (dateMatch) {
+        const dayStr = dateMatch[1].replace(/['"׳״]/g, '');
+        const monthStr = dateMatch[2];
+        if (GEMATRIA_MAP[dayStr]) parsedDay = GEMATRIA_MAP[dayStr];
+        for (const [eng, heb] of Object.entries(HEBREW_MONTH_NAMES)) {
+          if (heb === monthStr || monthStr.includes(heb)) {
+            parsedMonth = eng;
+            break;
+          }
+        }
+        dateFound = true;
+        console.log(`[Ingest] \u{1F4C5} Extracted Hebrew date: ${dayStr} (${parsedDay}) ${monthStr} -> ${parsedMonth}`);
+        // Remove the date from this line, keep any trailing text
+        const remainder = t.replace(dateMarkerPattern, '').trim();
+        if (remainder.length > 0) bodyLines.push(remainder);
+        continue;
+      }
+    }
+
+    // --- Rabbi Name Detection (short line before substantial body content) ---
+    if (!rabbi_name) {
+      const bodyText = bodyLines.filter(l => l.trim().length > 0).join(' ');
+      const isEarlyInContent = bodyText.length < 150;
+      const isShortLine = t.length > 0 && t.length < 100;
+      const hasHebrew = /[\u05d0-\u05ea]/.test(t);
+      if (isEarlyInContent && isShortLine && hasHebrew && !dateMarkerPattern.test(t)) {
+        rabbi_name = t;
+        // Rabbi is tracked as metadata; do NOT add to body
+        continue;
+      }
+    }
+
+    // Regular body line
+    bodyLines.push(t);
+  }
+
+  // Build final body preserving paragraph structure
+  const body = bodyLines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Extract day/month from story ID
+  let day = parsedDay;
+  let month = parsedMonth;
+  if (story.id) {
+    const idMatch = story.id.match(/([A-Za-z]+)(\d+)/);
+    if (idMatch) {
+      const monthCode = idMatch[1];
+      const dayNum = parseInt(idMatch[2], 10);
       const monthMap: {[key: string]: string} = {
         'Ad': 'Adar', 'Ni': 'Nissan', 'Iy': 'Iyar', 'Si': 'Sivan',
         'Ta': 'Tammuz', 'Av': 'Av', 'El': 'Elul', 'Ti': 'Tishrei',
         'Ch': 'Cheshvan', 'Ki': 'Kislev', 'Te': 'Tevet', 'Sh': 'Shevat'
       };
-      month = monthMap[monthCode] || 'Adar';
+      // Month from ID prefix is more reliable
+      month = monthMap[monthCode] || parsedMonth;
+      // Day: prefer dateFound (from body) over ID serial number
+      if (!dateFound) day = dayNum;
     }
   }
-  
+
   return {
     id: story.id,
-    body: repairHebrewText(body), // Normalize and Fix Nikkud
+    body: repairHebrewText(body),
     tags: tags,
     rabbi_name: rabbi_name,
     day: day,
     month: month,
-    title_he: rabbi_name // Use rabbi_name as title_he for now
+    title_he: rabbi_name
   };
 }
+
 
 async function generateEmbedding(text: string) {
   if (!text || text.length < 5) return null;
@@ -581,7 +581,7 @@ export async function POST(req: NextRequest) {
             rabbi_en: null,
             title_en: null,
             title_he: isTitleTag 
-              ? data.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim()
+              ? (data.rabbi_name?.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim() || null)
               : (data.title_he || null),
             body_en: null,
             body_he: data.body || null,
