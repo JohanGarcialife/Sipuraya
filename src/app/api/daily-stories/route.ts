@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchHebrewDate } from "@/lib/hebcal";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // Never statically cache — date changes daily
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,8 +46,32 @@ export async function GET(request: Request) {
       20
     );
 
-    // 1. Get current Hebrew date (with sunset logic)
-    const dateResult = await fetchHebrewDate();
+    // 1. Get current Hebrew date (with sunset logic).
+    // Wrapped in its own try/catch — if the external HebCal API is down or
+    // rate-limits us, we fall back to a safe default so the page still renders
+    // instead of crashing and returning an HTML error page to the client.
+    let dateResult;
+    try {
+      dateResult = await fetchHebrewDate();
+    } catch (hebcalError) {
+      console.error("HebCal API failed, using fallback date:", hebcalError);
+      dateResult = {
+        hebrewDate: {
+          day: 1,
+          month: "Adar",
+          monthHe: "אדר",
+          dayHe: "א׳",
+          year: 5785,
+          displayEn: "1 Adar",
+          displayHe: "א׳ אדר",
+          fullHe: "א׳ אדר תשפ״ה",
+        },
+        afterSunset: false,
+        sunset: null as string | null,
+        events: [] as string[],
+      };
+    }
+
     const { displayEn } = dateResult.hebrewDate;
 
     // 2. Query manually curated 'today' tag first
