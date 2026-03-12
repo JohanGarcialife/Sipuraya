@@ -4,18 +4,18 @@ import OpenAI from "openai";
 
 // Configure runtime for Edge functionality if compatible, or Node.js for broad compatibility
 export const runtime = 'nodejs'; 
-
-// Initialize OpenAI
-const openai = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });
-
-// Initialize Supabase (Service Role for RPC calls)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-);
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    // Initialize OpenAI
+    const openai = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });
+
+    // Initialize Supabase (Service Role for RPC calls)
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+    );
     const { query } = await req.json();
 
     if (!query) {

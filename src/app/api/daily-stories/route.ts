@@ -5,10 +5,7 @@ import { fetchHebrewDate } from "@/lib/hebcal";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic"; // Never statically cache — date changes daily
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-);
+
 
 /**
  * Fisher-Yates shuffle — returns a new shuffled array.
@@ -40,6 +37,11 @@ function shuffle<T>(array: T[]): T[] {
  */
 export async function GET(request: Request) {
   try {
+  const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+);
+
     const { searchParams } = new URL(request.url);
     const count = Math.min(
       Math.max(parseInt(searchParams.get("count") || "5", 10), 1),

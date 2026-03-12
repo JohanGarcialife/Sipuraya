@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-);
+export const dynamic = 'force-dynamic';
+
+
 
 // Hebrew month names that map to upcoming/spring holidays
 const HOLIDAY_MONTHS = [
@@ -25,6 +24,11 @@ const HOLIDAY_MONTHS = [
  */
 export async function GET() {
   try {
+  const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+);
+
     // 1. Fetch manually curated "holiday" stories
     const { data: taggedStories, error: tagError } = await supabase
       .from("stories")

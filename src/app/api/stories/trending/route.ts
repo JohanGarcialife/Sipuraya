@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-);
+export const dynamic = 'force-dynamic';
+
+
 
 /**
  * GET /api/stories/trending
@@ -13,6 +12,11 @@ const supabase = createClient(
  */
 export async function GET() {
   try {
+  const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+);
+
     // 1. Fetch manually curated "new" stories
     const { data: taggedStories, error: tagError } = await supabase
       .from("stories")

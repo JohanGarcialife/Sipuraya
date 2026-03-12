@@ -6,13 +6,11 @@ import pdf from "pdf-parse"; // Revert to default import matching zipper.js beha
 
 // CONFIGURATION
 export const runtime = 'nodejs'; // Required for FormData handling
+export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Increase to 300s (5 mins) for Pro, will be capped at 60s for Hobby
 
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-);
+
 
 const openai = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });
 
@@ -476,6 +474,11 @@ async function generateEmbedding(text: string) {
 
 export async function POST(req: NextRequest) {
   try {
+  const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+);
+
     // Read FormData containing files
     const formData = await req.formData();
     console.log("🔵 API INGEST: FormData received");

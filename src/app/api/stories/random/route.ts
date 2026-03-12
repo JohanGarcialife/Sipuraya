@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
+export const dynamic = 'force-dynamic';
+
+
+
+export async function GET() {
+  try {
+  const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export async function GET() {
-  try {
     // Pick a random story using Postgres random()
     const { data, error } = await supabase
       .rpc("get_random_story");
