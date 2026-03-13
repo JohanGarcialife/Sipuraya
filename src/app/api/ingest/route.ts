@@ -335,21 +335,25 @@ function parseHebrewStory(story: any) {
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
   const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
 
-  // --- 1. EXTRACT RABBI NAME FIRST (using the reliable split approach before line-by-line parsing deletes the tags) ---
-  const segments = rawContent.split('###').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+  // --- 1. EXTRACT RABBI NAME FIRST ---
+  // Split by either ### or newlines to evaluate every independent phrase early in the text
+  const segments = rawContent.split(/###|\n/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
   for (const seg of segments) {
     if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
     if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
     if (/^(Date|תאריך)/i.test(seg)) continue;
     if (seg === 'BIOGRAPHY') continue;
-    if (seg.startsWith('סיפור_מספר')) continue;
-    if (seg.length > 200) continue;
+    if (seg.includes('סיפור_מספר')) continue;
+    if (seg.startsWith('#')) continue; // Ignore tag lines or any arbitrary metadata starting with hashtag
+    if (seg.length > 100) continue; // Rabbi name shouldn't be a massive paragraph
     // Skip dates
     const datePat1 = new RegExp(`^[א-ת]['"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
     if (datePat1.test(seg)) continue;
-    // If it survives all checks and is reasonably short, it's the rabbi name
-    rabbi_name = seg;
-    break;
+    // If it survives all checks and contains Hebrew characters, it's the rabbi name
+    if (/[\u05d0-\u05ea]/.test(seg)) {
+      rabbi_name = seg;
+      break;
+    }
   }
 
   // Helper: is this a metadata/system line that should NOT appear in the body?
