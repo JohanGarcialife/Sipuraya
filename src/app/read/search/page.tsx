@@ -188,7 +188,7 @@ function SearchContent() {
           <div className="flex flex-col items-center justify-center py-20 text-(--reader-text-muted)">
             <Loader2 className="h-10 w-10 animate-spin text-(--reader-accent)" />
             <p className="mt-4" style={bodyFontStyle} dir={dir}>
-              {isHe ? "הבינה המלאכותית מחפשת בסיפורים..." : "AI is searching through the archives..."}
+              {isHe ? "מחפש בסיפורים..." : "Searching through the archives..."}
             </p>
           </div>
         )}
@@ -214,7 +214,7 @@ function SearchContent() {
               </div>
               <div>
                 <h2 className="mb-2 text-xl font-bold text-(--reader-accent)" style={fontFamilyStyle}>
-                  {isHe ? "סיפוריא AI זיהה:" : "Sipuraya AI says:"}
+                  {isHe ? "סיכום הסיפורים:" : "Stories Summary:"}
                 </h2>
                 <div 
                   className="prose prose-lg text-(--reader-text) leading-relaxed"

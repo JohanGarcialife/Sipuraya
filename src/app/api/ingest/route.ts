@@ -335,6 +335,23 @@ function parseHebrewStory(story: any) {
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
   const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
 
+  // --- 1. EXTRACT RABBI NAME FIRST (using the reliable split approach before line-by-line parsing deletes the tags) ---
+  const segments = rawContent.split('###').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+  for (const seg of segments) {
+    if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
+    if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
+    if (/^(Date|תאריך)/i.test(seg)) continue;
+    if (seg === 'BIOGRAPHY') continue;
+    if (seg.startsWith('סיפור_מספר')) continue;
+    if (seg.length > 200) continue;
+    // Skip dates
+    const datePat1 = new RegExp(`^[א-ת]['"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
+    if (datePat1.test(seg)) continue;
+    // If it survives all checks and is reasonably short, it's the rabbi name
+    rabbi_name = seg;
+    break;
+  }
+
   // Helper: is this a metadata/system line that should NOT appear in the body?
   function isMetaLine(line: string): boolean {
     const t = line.trim();
@@ -345,7 +362,7 @@ function parseHebrewStory(story: any) {
     return false;
   }
 
-  // Process line by line
+  // Process line by line for body and remaining data
   const lines = rawContent.split('\n');
   for (const rawLine of lines) {
     const t = rawLine.trim();
@@ -356,7 +373,7 @@ function parseHebrewStory(story: any) {
       let m;
       while ((m = inlineTagPattern.exec(t)) !== null) {
         const tag = m[1].trim();
-        if (tag && tag !== 'NEW STORY' && !/^(KOTERET|BIOGRAPHY|English|Hebrew)/i.test(tag)) {
+        if (tag && tag !== 'NEW STORY' && !/^(KOTERET|BIOGRAPHY|English|Hebrew)/i.test(tag) && tag !== rabbi_name) {
           tags.push(tag);
         }
       }
@@ -387,19 +404,6 @@ function parseHebrewStory(story: any) {
         // Remove the date from this line, keep any trailing text
         const remainder = t.replace(dateMarkerPattern, '').trim();
         if (remainder.length > 0) bodyLines.push(remainder);
-        continue;
-      }
-    }
-
-    // --- Rabbi Name Detection (short line before substantial body content) ---
-    if (!rabbi_name) {
-      const bodyText = bodyLines.filter(l => l.trim().length > 0).join(' ');
-      const isEarlyInContent = bodyText.length < 150;
-      const isShortLine = t.length > 0 && t.length < 100;
-      const hasHebrew = /[\u05d0-\u05ea]/.test(t);
-      if (isEarlyInContent && isShortLine && hasHebrew && !dateMarkerPattern.test(t)) {
-        rabbi_name = t;
-        // Rabbi is tracked as metadata; do NOT add to body
         continue;
       }
     }
