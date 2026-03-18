@@ -336,25 +336,32 @@ function parseHebrewStory(story: any) {
   const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
 
   // --- 1. EXTRACT RABBI NAME FIRST ---
-  // Split by either ### or newlines to evaluate every independent phrase early in the text
-  const segments = rawContent.split(/###|\n/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-  for (const seg of segments) {
-    if (/^(KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|NEW STORY)/i.test(seg)) continue;
-    if (/^English Translation/i.test(seg) || /^Hebrew Translation/i.test(seg)) continue;
-    if (/^(Date|תאריך)/i.test(seg)) continue;
-    if (seg === 'BIOGRAPHY') continue;
-    if (seg.includes('סיפור_מספר')) continue;
-    if (seg.startsWith('#')) continue; // Ignore tag lines or any arbitrary metadata starting with hashtag
-    if (seg.length > 100) continue; // Rabbi name shouldn't be a massive paragraph
-    // Skip dates
-    const datePat1 = new RegExp(`^[א-ת]['"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
-    if (datePat1.test(seg)) continue;
-    // If it survives all checks and contains Hebrew characters, it's the rabbi name
-    if (/[\u05d0-\u05ea]/.test(seg)) {
-      rabbi_name = seg;
+  // Pass 1: Look for explicit "###<HebrewName>" lines that aren't system keywords.
+  // Format in the Adar files: ###NEW STORY / ###רבי אברהם אבן עזרא / ###א' אדר / BIOGRAPHY###
+  const rawLines = rawContent.split('\n');
+  for (const rawLine of rawLines) {
+    const t = rawLine.trim();
+    // Must start with ### to be an explicit tag
+    if (!t.startsWith('###')) continue;
+    // Strip the ### prefix and any trailing ###
+    const inner = t.replace(/^###|###$/g, '').trim();
+    // Skip known system keywords
+    if (!inner || /^(NEW STORY|KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|English Translation|Hebrew Translation)/i.test(inner)) continue;
+    // Skip ID lines
+    if (inner.includes('סיפור_מספר')) continue;
+    // Skip if too long to be a name
+    if (inner.length > 100) continue;
+    // Skip Hebrew dates (e.g. א' אדר)
+    const datePat = new RegExp(`^[א-ת]['\"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
+    if (datePat.test(inner)) continue;
+    // Must contain Hebrew characters to be a name
+    if (/[\u05d0-\u05ea]/.test(inner)) {
+      rabbi_name = inner;
+      console.log(`[Ingest] ✡️ Found Rabbi name via ### tag: "${rabbi_name}"`);
       break;
     }
   }
+
 
   // Helper: is this a metadata/system line that should NOT appear in the body?
   function isMetaLine(line: string): boolean {
