@@ -643,6 +643,40 @@ export async function POST(req: NextRequest) {
     });
     }
 
+    // NEW PRE-UPSERT FIX: Auto-fill missing Rabbi HE names based on known English Rabbi names in the DB
+    // Since some translators omit the Rabbi line in Hebrew files, we look up existing pairs in Supabase
+    if (storiesMap.size > 0) {
+      console.log("[Ingest] Auto-resolving missing Hebrew Rabbi names...");
+      
+      // Step 1: Collect all English Rabbi names that need Hebrew translations
+      const missingHeRabbiEnNames = Array.from(storiesMap.values())
+        .filter(s => !s.rabbi_he && s.rabbi_en)
+        .map(s => s.rabbi_en);
+        
+      if (missingHeRabbiEnNames.length > 0) {
+        // Find existing matches from the DB
+        const { data: rabbiTbl } = await supabase
+          .from('stories')
+          .select('rabbi_en, rabbi_he')
+          .in('rabbi_en', missingHeRabbiEnNames)
+          .not('rabbi_he', 'is', null);
+
+        if (rabbiTbl && rabbiTbl.length > 0) {
+          const dict: Record<string, string> = {};
+          for (const row of rabbiTbl) {
+            dict[row.rabbi_en] = row.rabbi_he;
+          }
+          
+          for (const story of storiesMap.values()) {
+            if (!story.rabbi_he && story.rabbi_en && dict[story.rabbi_en]) {
+              story.rabbi_he = dict[story.rabbi_en];
+              console.log(`[Ingest] 🪄 Auto-filled missing Rabbi (HE) for ${story.story_id}: ${story.rabbi_he}`);
+            }
+          }
+        }
+      }
+    }
+
     if (rawStoriesEn.length > 0) {
       console.log(`[Ingest] Merged HE stories. Match Count: ${matchCount}`);
     } else {
