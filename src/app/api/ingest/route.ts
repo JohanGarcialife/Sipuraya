@@ -650,36 +650,67 @@ export async function POST(req: NextRequest) {
     });
     }
 
-    // NEW PRE-UPSERT FIX: Auto-fill missing Rabbi HE names based on known English Rabbi names in the DB
-    // Since some translators omit the Rabbi line in Hebrew files, we look up existing pairs in Supabase
+    // PRE-UPSERT: Auto-fill missing Rabbi HE names using the permanent 'rabbis' lookup table.
+    // This table is never wiped when stories are deleted, so it always has the EN→HE mapping.
     if (storiesMap.size > 0) {
-      console.log("[Ingest] Auto-resolving missing Hebrew Rabbi names...");
-      
-      // Step 1: Collect all English Rabbi names that need Hebrew translations
-      const missingHeRabbiEnNames = Array.from(storiesMap.values())
-        .filter(s => !s.rabbi_he && s.rabbi_en)
-        .map(s => s.rabbi_en);
-        
-      if (missingHeRabbiEnNames.length > 0) {
-        // Find existing matches from the DB
-        const { data: rabbiTbl } = await supabase
-          .from('stories')
-          .select('rabbi_en, rabbi_he')
-          .in('rabbi_en', missingHeRabbiEnNames)
-          .not('rabbi_he', 'is', null);
+      console.log("[Ingest] Auto-resolving missing Hebrew Rabbi names from 'rabbis' table...");
 
-        if (rabbiTbl && rabbiTbl.length > 0) {
-          const dict: Record<string, string> = {};
-          for (const row of rabbiTbl) {
-            dict[row.rabbi_en] = row.rabbi_he;
+      // Collect unique English Rabbi names that are missing their Hebrew equivalent
+      const missingHeRabbiEnNames = [...new Set(
+        Array.from(storiesMap.values())
+          .filter(s => !s.rabbi_he && s.rabbi_en)
+          .map(s => s.rabbi_en as string)
+      )];
+
+      if (missingHeRabbiEnNames.length > 0) {
+        // Query the permanent 'rabbis' lookup table (survives story deletions)
+        const { data: rabbiRows } = await supabase
+          .from('rabbis')
+          .select('name_en, name_he')
+          .in('name_en', missingHeRabbiEnNames)
+          .not('name_he', 'is', null);
+
+        // Also fall back to the stories table for any rabbis not in the lookup table yet
+        const foundEnNames = new Set((rabbiRows || []).map((r: any) => r.name_en));
+        const stillMissing = missingHeRabbiEnNames.filter(n => !foundEnNames.has(n));
+        
+        let storyFallbackRows: any[] = [];
+        if (stillMissing.length > 0) {
+          const { data: sfr } = await supabase
+            .from('stories')
+            .select('rabbi_en, rabbi_he')
+            .in('rabbi_en', stillMissing)
+            .not('rabbi_he', 'is', null)
+            .limit(1000);
+          storyFallbackRows = sfr || [];
+        }
+
+        // Build the EN→HE dictionary from both sources (rabbis table takes priority)
+        const dict: Record<string, string> = {};
+        for (const row of storyFallbackRows) {
+          if (row.rabbi_en && row.rabbi_he) dict[row.rabbi_en] = row.rabbi_he;
+        }
+        for (const row of (rabbiRows || [])) {
+          if (row.name_en && row.name_he) dict[row.name_en] = row.name_he;
+        }
+
+        // Apply the lookup to all stories missing rabbi_he
+        for (const story of storiesMap.values()) {
+          if (!story.rabbi_he && story.rabbi_en && dict[story.rabbi_en]) {
+            story.rabbi_he = dict[story.rabbi_en];
+            console.log(`[Ingest] 🪄 Auto-filled Rabbi (HE) for ${story.story_id}: ${story.rabbi_he}`);
           }
-          
-          for (const story of storiesMap.values()) {
-            if (!story.rabbi_he && story.rabbi_en && dict[story.rabbi_en]) {
-              story.rabbi_he = dict[story.rabbi_en];
-              console.log(`[Ingest] 🪄 Auto-filled missing Rabbi (HE) for ${story.story_id}: ${story.rabbi_he}`);
-            }
-          }
+        }
+
+        // Persist any new EN→HE pairs we found into the rabbis table for future use
+        const newPairs = Array.from(storiesMap.values())
+          .filter(s => s.rabbi_he && s.rabbi_en)
+          .map(s => ({ name_en: s.rabbi_en, name_he: s.rabbi_he }));
+        if (newPairs.length > 0) {
+          await supabase
+            .from('rabbis')
+            .upsert(newPairs, { onConflict: 'name_en', ignoreDuplicates: false });
+          console.log(`[Ingest] 📖 Persisted ${newPairs.length} rabbi EN→HE pairs to rabbis table`);
         }
       }
     }

@@ -155,14 +155,17 @@ export async function fetchHebrewDate(
   }
 
   // 4. Fetch Hebrew date from Converter API
+  // NOTE: We intentionally do NOT pass afterSunset=on to the converter.
+  // Passing it would advance the Hebrew date to "tomorrow" at sunset in Jerusalem
+  // (around 6:30 PM IST = 11:30 AM EST), causing US users to see next day's stories
+  // in the afternoon. We treat the Hebrew date as matching the Gregorian calendar date,
+  // and use afterSunset only as a display/informational flag to the client.
   const converterUrl = new URL("https://www.hebcal.com/converter");
   converterUrl.searchParams.set("cfg", "json");
   converterUrl.searchParams.set("date", today);
   converterUrl.searchParams.set("g2h", "1");
   converterUrl.searchParams.set("strict", "1");
-  if (afterSunset) {
-    converterUrl.searchParams.set("afterSunset", "on");
-  }
+  // ⬇️ Removed: afterSunset=on — no longer advance the day at sunset
 
   const res = await fetch(converterUrl.toString());
   if (!res.ok) {
