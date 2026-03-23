@@ -352,13 +352,48 @@ function parseHebrewStory(story: any) {
     // Skip if too long to be a name
     if (inner.length > 100) continue;
     // Skip Hebrew dates (e.g. א' אדר)
-    const datePat = new RegExp(`^[א-ת]['\"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
+    const datePat = new RegExp(`^[א-ת]['"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
     if (datePat.test(inner)) continue;
     // Must contain Hebrew characters to be a name
     if (/[\u05d0-\u05ea]/.test(inner)) {
       rabbi_name = inner;
       console.log(`[Ingest] ✡️ Found Rabbi name via ### tag: "${rabbi_name}"`);
       break;
+    }
+  }
+
+  // Pass 2 (Fallback): Client format changed in Nissan files — Rabbi name is on "line 3" without ### tags.
+  // It usually looks like:
+  // #סיפור_מספר: Ni0001
+  // NEW STORY
+  // הגאון רבי שמואל הלוי קעלין זי"ע - בעל מחצית השקל
+  if (!rabbi_name) {
+    let nonMetaLineCount = 0;
+    for (const rawLine of rawLines) {
+      const t = rawLine.trim();
+      if (!t) continue;
+      
+      // Skip ID lines and system tags
+      if (t.includes('סיפור_מספר') || /^(###)?(NEW STORY|KOTERET|BIOGRAPHY|English Title|Hebrew Title|Title|English Translation|Hebrew Translation)/i.test(t)) {
+        continue;
+      }
+
+      // Check if it's the date line
+      const cleanT = t.replace(/^###|###$/g, '').trim();
+      const datePat = new RegExp(`^[א-ת]['"׳״]?[א-ת]*\\s+(${hebrewMonths})`, 'i');
+      if (datePat.test(cleanT)) continue;
+
+      // This is the first "content" line
+      nonMetaLineCount++;
+      
+      if (nonMetaLineCount === 1) {
+        // If it's relatively short, it's very likely the Rabbi Name / Title
+        if (cleanT.length > 3 && cleanT.length < 120 && /[\u05d0-\u05ea]/.test(cleanT)) {
+          rabbi_name = cleanT;
+          console.log(`[Ingest] ✡️ Found Rabbi name via Line-3 fallback: "${rabbi_name}"`);
+        }
+        break; // Stop looking after the first content line
+      }
     }
   }
 
@@ -394,6 +429,13 @@ function parseHebrewStory(story: any) {
 
     // Skip blank lines at the very beginning (before any body content)
     if (!t && bodyLines.every(l => l.trim() === '')) {
+      continue;
+    }
+
+    // --- Skip Rabbi Name Line (if extracted via fallback) ---
+    // If this line exactly matches the rabbi name we just extracted, skip adding it to the body
+    const cleanT = t.replace(/^###|###$/g, '').trim();
+    if (rabbi_name && cleanT === rabbi_name) {
       continue;
     }
 
