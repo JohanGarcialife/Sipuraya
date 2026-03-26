@@ -139,9 +139,30 @@ async function extractText(buffer: Buffer, fileType: string) {
       const data = await pdf(buffer);
       console.log(`[ExtractText] PDF parsed. Text length: ${data.text.length}`);
       return data.text.replace(/\n\n+/g, '\n');
+    } else if (fileType.toLowerCase().endsWith(".docx") || fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Use convertToHtml instead of extractRawText to preserve soft line breaks (Shift+Enter / <w:br/>)
+      const result = await mammoth.convertToHtml({ buffer });
+      
+      // Manually convert HTML paragraph and break tags to text newlines
+      let text = result.value
+        .replace(/<\/p>/g, '\n\n')
+        .replace(/<br\s*\/?>/g, '\n')
+        .replace(/<\/?[^>]+(>|$)/g, ""); // strip any remaining headers, bold, italics, etc
+        
+      // Unescape common HTML entities
+      text = text
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+
+      console.log(`[ExtractText] DOCX parsed. Text length: ${text.length}`);
+      return text;
     } else {
       const result = await mammoth.extractRawText({ buffer: buffer });
-      console.log(`[ExtractText] DOCX parsed. Text length: ${result.value.length}`);
+      console.log(`[ExtractText] Other file type parsed. Text length: ${result.value.length}`);
       return result.value;
     }
   } catch (e: any) {
@@ -660,27 +681,23 @@ export async function POST(req: NextRequest) {
       rawStoriesHe.forEach(heStory => {
       // Use specialized Hebrew parser
       const data = parseHebrewStory(heStory);
-      if (data.id && storiesMap.has(data.id)) {
+      if (!data.id) return; // Skip if no ID
+
+      const isTitleTag = data.rabbi_name && /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(data.rabbi_name);
+
+      if (storiesMap.has(data.id)) {
+        // ✅ MATCHED — merge Hebrew data into existing English story
         const existing = storiesMap.get(data.id);
         
         // Update fields if present
         if (data.body && data.body.length > 2) existing.body_he = data.body;
         
-        // CRITICAL FIX: Only assign to rabbi_he if it's NOT a title tag (KOTERET, BIOGRAPHY, etc.)
         if (data.rabbi_name) {
-          const isTitleTag = /^(KOTERET|BIOGRAPHY|Hebrew Title|Title)/i.test(data.rabbi_name);
-          
           if (isTitleTag) {
-            // This is a title, not a rabbi name
             existing.title_he = data.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
           } else {
-            // This is actually a rabbi name
             existing.rabbi_he = data.rabbi_name;
-            
-            // Fallback: if no title_he yet, use rabbi name as title
-            if (!existing.title_he) {
-              existing.title_he = data.rabbi_name;
-            }
+            if (!existing.title_he) existing.title_he = data.rabbi_name;
           }
         }
 
@@ -688,6 +705,26 @@ export async function POST(req: NextRequest) {
           existing.tags = Array.from(new Set([...existing.tags, ...data.tags]));
         }
         matchCount++;
+      } else {
+        // ⚠️ UNMATCHED — Hebrew story has no English counterpart in THIS batch.
+        // Still add it so we don't lose Hebrew content. It will upsert via story_id.
+        console.log(`[Ingest] ℹ️ No English match for ${data.id} — adding Hebrew-only entry.`);
+        const day = data.day || 1;
+        const month = data.month || 'Adar';
+        storiesMap.set(data.id, {
+          story_id: data.id,
+          date_he: formatHebrewDate(day, month),
+          date_en: formatEnglishDate(day, month),
+          rabbi_he: isTitleTag ? null : (data.rabbi_name || null),
+          rabbi_en: null,
+          title_en: null,
+          title_he: isTitleTag
+            ? (data.rabbi_name?.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim() || null)
+            : (data.title_he || null),
+          body_en: null,
+          body_he: data.body || null,
+          tags: data.tags || [],
+        });
       }
     });
     }
