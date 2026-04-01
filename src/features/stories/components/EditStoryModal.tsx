@@ -194,23 +194,59 @@ export default function EditStoryModal({
           </div>
 
           {/* Tags Section - Full Width */}
-          <div className="space-y-2 border-t pt-4">
-            <Label>Tags / Metadata</Label>
-            <Textarea
-              className="min-h-[60px]" 
-              placeholder="Enter tags separated by commas (e.g., BIOGRAPHY, Pesach, Education)"
-              value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
-              onChange={(e) => {
-                const tagsArray = e.target.value
-                  .split(',')
-                  .map(t => t.trim())
-                  .filter(t => t.length > 0);
-                setFormData((prev) => ({ ...prev, tags: tagsArray }));
-              }}
-            />
-            <p className="text-xs text-gray-500">
-              Internal organization tags (extracted from ### markers in source files)
-            </p>
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Promotion & Tags</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={formData.tags.includes("holiday") ? "default" : "outline"}
+                  size="sm"
+                  className={formData.tags.includes("holiday") ? "bg-amber-600 hover:bg-amber-700" : ""}
+                  onClick={() => {
+                    const newTags = formData.tags.includes("holiday")
+                      ? formData.tags.filter(t => t !== "holiday")
+                      : [...formData.tags, "holiday"];
+                    setFormData(prev => ({ ...prev, tags: newTags }));
+                  }}
+                >
+                  🕍 Holiday Section
+                </Button>
+                <Button
+                  type="button"
+                  variant={formData.tags.includes("new") ? "default" : "outline"}
+                  size="sm"
+                  className={formData.tags.includes("new") ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  onClick={() => {
+                    const newTags = formData.tags.includes("new")
+                      ? formData.tags.filter(t => t !== "new")
+                      : [...formData.tags, "new"];
+                    setFormData(prev => ({ ...prev, tags: newTags }));
+                  }}
+                >
+                  🆕 Recently Added
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-gray-500 uppercase tracking-wider">Internal Tags (Comma Separated)</Label>
+              <Textarea
+                className="min-h-[60px]" 
+                placeholder="Enter tags separated by commas (e.g., BIOGRAPHY, Pesach, Education)"
+                value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
+                onChange={(e) => {
+                  const tagsArray = e.target.value
+                    .split(',')
+                    .map(t => t.trim())
+                    .filter(t => t.length > 0);
+                  setFormData((prev) => ({ ...prev, tags: tagsArray }));
+                }}
+              />
+              <p className="text-xs text-gray-400">
+                Use the buttons above to quickly feature this story, or add custom tags below.
+              </p>
+            </div>
           </div>
         </div>
 

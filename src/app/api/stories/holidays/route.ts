@@ -8,14 +8,19 @@ export const dynamic = 'force-dynamic';
 // Hebrew month names that map to upcoming/spring holidays
 const HOLIDAY_MONTHS = [
   "ניסן",    // Nisan — Pesach
+  "אייר",   // Iyar — Lag BaOmer
+  "סיון",   // Sivan — Shavuot
+  "תמוז",   // Tamuz — 17 Tamuz
+  "אב",     // Av — Tisha B'Av
+  "אלול",   // Elul — Preparation for High Holidays
   "תשרי",   // Tishrei — Rosh Hashana, Yom Kippur, Sukkot
+  "חשון",   // Cheshvan — (No major holidays, but good for coverage)
   "כסלו",   // Kislev — Chanukah
   "טבת",    // Tevet — Chanukah continuation
+  "שבט",    // Shevat — Tu B'Shevat
   "אדר",    // Adar — Purim
   "אדר א",  // Adar I
   "אדר ב",  // Adar II
-  "אב",     // Av — Tisha B'Av
-  "שבט",    // Shevat — Tu B'Shevat
 ];
 
 /**
