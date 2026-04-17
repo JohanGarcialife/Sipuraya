@@ -47,6 +47,8 @@ export async function GET(request: Request) {
       Math.max(parseInt(searchParams.get("count") || "5", 10), 1),
       20
     );
+    // offset: how many days to shift from today. Clamped to [-2, +2] for safety.
+    const offset = Math.max(-2, Math.min(2, parseInt(searchParams.get("offset") || "0", 10)));
 
     // 1. Get current Hebrew date (with sunset logic).
     // Wrapped in its own try/catch — if the external HebCal API is down or
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
     // instead of crashing and returning an HTML error page to the client.
     let dateResult;
     try {
-      dateResult = await fetchHebrewDate();
+      dateResult = await fetchHebrewDate(undefined, undefined, offset);
     } catch (hebcalError) {
       console.error("HebCal API failed, using fallback date:", hebcalError);
       dateResult = {
@@ -76,15 +78,17 @@ export async function GET(request: Request) {
 
     const { displayEn } = dateResult.hebrewDate;
 
-    // 2. Query manually curated 'today' tag first
-    const { data: taggedStories } = await supabase
-      .from("stories")
-      .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags")
-      .eq("is_published", true)
-      .contains("tags", ["today"])
-      .limit(count);
-
-    let selected = [...(taggedStories || [])];
+    // 2. Query manually curated 'today' tag first — only when viewing today (offset=0)
+    let selected: any[] = [];
+    if (offset === 0) {
+      const { data: taggedStories } = await supabase
+        .from("stories")
+        .select("story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags")
+        .eq("is_published", true)
+        .contains("tags", ["today"])
+        .limit(count);
+      selected = [...(taggedStories || [])];
+    }
     const excludeIds = selected.map((s) => s.story_id);
 
     // 3. Query all stories matching today's Hebrew date (for total count and filling remainders)

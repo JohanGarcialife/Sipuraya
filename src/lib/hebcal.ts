@@ -95,10 +95,12 @@ function getHebrewMonthName(sipurayaMonth: string): string {
 }
 
 /**
- * Format the current date as YYYY-MM-DD in the given timezone.
+ * Format a date (offset by N days from now) as YYYY-MM-DD in the given timezone.
+ * offsetDays=0 → today, offsetDays=-1 → yesterday, offsetDays=+2 → day after tomorrow.
  */
-function todayInTimezone(tz: string): string {
+function dateWithOffset(tz: string, offsetDays: number): string {
   const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -138,10 +140,11 @@ async function fetchSunset(
  */
 export async function fetchHebrewDate(
   geonameid: number = DEFAULT_GEONAMEID,
-  timezone: string = DEFAULT_TIMEZONE
+  timezone: string = DEFAULT_TIMEZONE,
+  offsetDays: number = 0  // 0=today, -1=yesterday, +1=tomorrow, etc.
 ): Promise<HebrewDateResponse> {
-  // 1. Get today's date in the target timezone
-  const today = todayInTimezone(timezone);
+  // 1. Get the target date (today ± offset) in the given timezone
+  const today = dateWithOffset(timezone, offsetDays);
 
   // 2. Get sunset time for today
   const sunset = await fetchSunset(today, geonameid);
