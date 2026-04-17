@@ -125,33 +125,29 @@ export default function ReadPage() {
               const isActive = offset === dateOffset;
               const labelEn = NAV_LABELS_EN[offset + 2];
               const labelHe = NAV_LABELS_HE[offset + 2];
-              // For the active offset, show the actual Hebrew date if we have it
-              const activeDateLabel = isActive && data
+              
+              // Show the formal Hebrew date if active and data is loaded.
+              // Otherwise, show the relative label (Today, Yesterday, etc.)
+              const displayText = isActive && data
                 ? (isHe ? data.hebrewDate.displayHe : data.hebrewDate.displayEn)
-                : null;
+                : (isHe ? labelHe : labelEn);
 
               return (
                 <button
                   key={offset}
                   onClick={() => setDateOffset(offset)}
-                  className={`flex flex-1 flex-col items-center rounded-xl px-1 py-1.5 text-center transition ${
+                  className={`flex flex-1 items-center justify-center rounded-xl px-1 py-2 text-center transition ${
                     isActive
                       ? "bg-(--reader-accent) text-(--reader-accent-foreground) shadow-sm"
-                      : "text-(--reader-text-muted) hover:bg-(--reader-surface-hover)"
+                      : "text-(--reader-text) hover:bg-(--reader-surface-hover)"
                   }`}
                 >
                   <span
-                    className="text-[10px] font-medium uppercase tracking-wider opacity-75 sm:hidden"
-                    style={fontFamilyStyle}
-                  >
-                    {isHe ? labelHe : labelEn}
-                  </span>
-                  <span
-                    className="text-xs font-semibold leading-tight"
+                    className="text-[11px] font-bold leading-tight"
                     style={fontFamilyStyle}
                     dir={isHe ? "rtl" : "ltr"}
                   >
-                    {activeDateLabel || (offset === 0 ? (isHe ? "היום" : "Today") : "")}
+                    {displayText}
                   </span>
                 </button>
               );
