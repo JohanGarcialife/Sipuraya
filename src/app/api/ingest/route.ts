@@ -58,9 +58,19 @@ function formatEnglishDate(day: number, monthEnglish: string): string {
   return `${day} ${monthEnglish}`;
 }
 
-function cleanId(id: string) {
+function cleanId(id: string | null) {
   if (!id) return null;
-  return id.replace(/[^a-zA-Z0-9]/g, '');
+  // Handle case like "Ni0044" -> "Ni44" or "ly0074" -> "Iy74"
+  const match = id.match(/([A-Za-z]+)(\d+)/);
+  if (!match) return id.trim().toUpperCase();
+
+  let prefix = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+  
+  // Normalize common typos (English file often uses lowercase L 'ly' instead of capital I 'Iy')
+  if (prefix === 'Ly') prefix = 'Iy';
+
+  const num = parseInt(match[2], 10);
+  return `${prefix}${num}`;
 }
 
 function smartFindId(line: string) {
@@ -461,8 +471,11 @@ function parseHebrewStory(story: any) {
     }
 
     // --- Date Detection ---
-    if (!dateFound && dateMarkerPattern.test(t)) {
-      const dateMatch = t.match(dateMarkerPattern);
+    // Clean line for regex testing (remove optional ###)
+    const normalizedLine = t.replace(/^###|###$/g, '').trim();
+
+    if (!dateFound && dateMarkerPattern.test(normalizedLine)) {
+      const dateMatch = normalizedLine.match(dateMarkerPattern);
       if (dateMatch) {
         const dayStr = dateMatch[1].replace(/['"׳״]/g, '');
         const monthStr = dateMatch[2];
@@ -474,10 +487,9 @@ function parseHebrewStory(story: any) {
           }
         }
         dateFound = true;
-        console.log(`[Ingest] \u{1F4C5} Extracted Hebrew date: ${dayStr} (${parsedDay}) ${monthStr} -> ${parsedMonth}`);
-        // Remove the date from this line, keep any trailing text
-        const remainder = t.replace(dateMarkerPattern, '').trim();
-        if (remainder.length > 0) bodyLines.push(remainder);
+        console.log(`[Ingest] 📅 Extracted Hebrew date: ${dayStr} (${parsedDay}) ${monthStr} -> ${parsedMonth}`);
+        
+        // No need to push to bodyLines as it was identified as metadata
         continue;
       }
     }
@@ -583,7 +595,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Ingest] TEXT PREVIEW HE: ${textHe.substring(0, 200)}`);
 
     const splitRegex = /^(?:###\s*)?NEW\s*STORY/im;
-    const rawStoriesEn = textEn ? textEn.split(splitRegex) : [];
+    const rawStoriesEn = textEn ? textEn.split(splitRegex).filter(s => s.trim().length > 10) : [];
     
     // Process Hebrew (special split by ID tag logic from zipper.js)
     const rawStoriesHe = splitHebrewStories(textHe);
