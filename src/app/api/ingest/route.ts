@@ -358,6 +358,7 @@ function parseHebrewStory(story: any) {
   const rawContent = story.content;
   const tags: string[] = [];
   let rabbi_name: string | null = null;
+  let title_he: string | null = null;
   let parsedDay = 1;
   let parsedMonth = 'Adar';
   let dateFound = false;
@@ -366,10 +367,22 @@ function parseHebrewStory(story: any) {
   const hebrewMonths = 'ניסן|אדר|אייר|סיון|תמוז|אב|אלול|תשרי|חשון|כסלו|טבת|שבט';
   const dateMarkerPattern = new RegExp(`^([א-ת]+['"׳״]?[א-ת]*)\\s*(${hebrewMonths})`, 'i');
 
-  // --- 1. EXTRACT RABBI NAME FIRST ---
+  const rawLines = rawContent.split('\n');
+
+  // --- 1. EXTRACT KOTERET (TITLE) AND RABBI NAME FIRST ---
+  // Pass 0: Extract KOTERET
+  for (const rawLine of rawLines) {
+    const t = rawLine.trim();
+    const match = t.match(/^(?:###)?\s*(?:KOTERET|Hebrew Title|Title):\s*(.+)/i);
+    if (match) {
+      title_he = match[1].replace(/^###|###$/g, '').trim();
+      console.log(`[Ingest] 🏷️ Found Hebrew Title (KOTERET): "${title_he}"`);
+      break;
+    }
+  }
+
   // Pass 1: Look for explicit "###<HebrewName>" lines that aren't system keywords.
   // Format in the Adar files: ###NEW STORY / ###רבי אברהם אבן עזרא / ###א' אדר / BIOGRAPHY###
-  const rawLines = rawContent.split('\n');
   for (const rawLine of rawLines) {
     const t = rawLine.trim();
     // Must start with ### to be an explicit tag
@@ -531,7 +544,7 @@ function parseHebrewStory(story: any) {
     rabbi_name: rabbi_name,
     day: day,
     month: month,
-    title_he: rabbi_name
+    title_he: title_he || rabbi_name
   };
 }
 
@@ -704,13 +717,12 @@ export async function POST(req: NextRequest) {
         // Update fields if present
         if (data.body && data.body.length > 2) existing.body_he = data.body;
         
-        if (data.rabbi_name) {
-          if (isTitleTag) {
-            existing.title_he = data.rabbi_name.replace(/^(KOTERET|BIOGRAPHY|Hebrew Title|Title):\s*/i, '').trim();
-          } else {
-            existing.rabbi_he = data.rabbi_name;
-            if (!existing.title_he) existing.title_he = data.rabbi_name;
-          }
+        // Always prefer the explicit KOTERET title_he over rabbi_name
+        if (data.title_he) {
+          existing.title_he = data.title_he;
+        }
+        if (data.rabbi_name && !isTitleTag) {
+          existing.rabbi_he = data.rabbi_name;
         }
 
         if (data.tags && data.tags.length > 0) {
