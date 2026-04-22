@@ -284,6 +284,21 @@ function parseStoryBlock(block: string) {
               storyData.rabbi_name = rabbi;
               return;
           }
+
+          // CRITICAL FIX: Extract inline body from ###English Translation: tag
+          // Format: "###English Translation: My master, father..." — the story text is on the same line
+          const regexBodyEn = /^###English Translation:/i;
+          if (regexBodyEn.test(cleanLine)) {
+              const bodyContent = cleanLine.replace(regexBodyEn, '').trim();
+              if (bodyContent && bodyContent.length > 0) {
+                  bodyBuffer.push(bodyContent);
+              }
+              return;
+          }
+
+          // Skip ###Sources Tag: lines (metadata, not body)
+          if (/^###Sources Tag:/i.test(cleanLine)) return;
+
           return; 
       } 
       
