@@ -11,8 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { UploadCloud, Loader2 } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/supabase";
+import { Loader2, FileSpreadsheet, FileText } from "lucide-react";
 
 interface UploadBatchModalProps {
   isOpen: boolean;
@@ -20,73 +19,74 @@ interface UploadBatchModalProps {
   onSuccess: () => void;
 }
 
+type UploadMode = "xlsx" | "docx";
+
 export default function UploadBatchModal({
   isOpen,
   onClose,
   onSuccess,
 }: UploadBatchModalProps) {
-  const supabase = createSupabaseBrowserClient();
+  const [mode, setMode] = useState<UploadMode>("xlsx");
+  const [fileXlsx, setFileXlsx] = useState<File | null>(null);
   const [fileEn, setFileEn] = useState<File | null>(null);
   const [fileHe, setFileHe] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
   const handleUpload = async () => {
-    console.log("🚀 Starting upload process...");
-    // Hebrew file is required, English is optional
-    if (!fileHe) {
-      console.warn("⚠️ Hebrew file missing");
+    if (mode === "xlsx" && !fileXlsx) {
+      setStatus("⚠️ Please select a spreadsheet (.xlsx) file.");
+      return;
+    }
+    if (mode === "docx" && !fileHe) {
       setStatus("⚠️ Please select at least the Hebrew file.");
       return;
     }
 
     setLoading(true);
-    setStatus("Processing files... This may take a minute.");
-    console.log("📂 Files selected:", fileEn?.name || "(none)", fileHe.name);
+    setStatus("Processing... This may take a minute.");
 
     try {
-      // Send files directly to API as FormData
       const formData = new FormData();
-      if (fileEn) formData.append("fileEn", fileEn);
-      formData.append("fileHe", fileHe);
+      if (mode === "xlsx" && fileXlsx) {
+        formData.append("fileXlsx", fileXlsx);
+      } else {
+        if (fileEn) formData.append("fileEn", fileEn);
+        formData.append("fileHe", fileHe!);
+      }
 
-      console.log("📡 Sending files to API...");
       const res = await fetch("/api/ingest", {
         method: "POST",
-        body: formData, // No Content-Type header - browser sets it automatically with boundary
+        body: formData,
       });
 
-      console.log("📡 API Response status:", res.status);
       const text = await res.text();
       let data;
-      
+
       if (text && text.includes("<!DOCTYPE html>")) {
-           throw new Error("Server Timeout (504): The files are too large or processing took too long.");
-      }
-      
-      try {
-          data = JSON.parse(text);
-      } catch (jsonError) {
-           console.error("Failed to parse API response:", text);
-           throw new Error(`Invalid Server Response: ${text.substring(0, 50)}...`);
+        throw new Error("Server Timeout (504): The files are too large or processing took too long.");
       }
 
-      console.log("📡 API Response body:", data);
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Invalid Server Response: ${text.substring(0, 50)}...`);
+      }
 
       if (res.ok) {
         setStatus(`✅ Success! ${data.message}`);
         setTimeout(() => {
-          onSuccess(); // Refresh parent
+          onSuccess();
           onClose();
           setStatus("");
+          setFileXlsx(null);
           setFileEn(null);
           setFileHe(null);
-        }, 2000);
+        }, 2500);
       } else {
         setStatus(`❌ Error: ${data.error}`);
       }
     } catch (e: any) {
-      console.error("Upload/Ingest Error:", e);
       setStatus(`❌ Error: ${e.message || "Unknown error occurred"}`);
     } finally {
       setLoading(false);
@@ -97,36 +97,81 @@ export default function UploadBatchModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Batch Upload (The Zipper)</DialogTitle>
+          <DialogTitle>Upload Stories</DialogTitle>
           <DialogDescription>
-            Upload Hebrew file (.docx or .pdf). English file is optional - the system can process Hebrew-only stories.
+            Choose your upload method. Spreadsheet is recommended for reliability.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="file-en">English File (Optional)</Label>
-            <Input
-              id="file-en"
-              type="file"
-              accept=".docx,.pdf"
-              onChange={(e) => setFileEn(e.target.files?.[0] || null)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="file-he">Hebrew File</Label>
-            <Input
-              id="file-he"
-              type="file"
-              accept=".docx,.pdf"
-              onChange={(e) => setFileHe(e.target.files?.[0] || null)}
-            />
-          </div>
+        {/* Mode Selector */}
+        <div className="flex gap-2 rounded-lg bg-gray-100 p-1">
+          <button
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+              mode === "xlsx" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setMode("xlsx")}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Spreadsheet (.xlsx)
+          </button>
+          <button
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+              mode === "docx" ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => setMode("docx")}
+          >
+            <FileText className="h-4 w-4" />
+            Word Docs (.docx)
+          </button>
+        </div>
+
+        <div className="grid gap-4 py-2">
+          {mode === "xlsx" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="file-xlsx">Merged Spreadsheet (.xlsx)</Label>
+              <Input
+                id="file-xlsx"
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setFileXlsx(e.target.files?.[0] || null)}
+              />
+              <p className="text-xs text-gray-500">
+                Required columns: Story ID, Rabbi (English), Rabbi (Hebrew), Date (English), Date (Hebrew), Title (English), Title (Hebrew), Content (English), Content (Hebrew)
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="file-en">English File (Optional)</Label>
+                <Input
+                  id="file-en"
+                  type="file"
+                  accept=".docx,.pdf"
+                  onChange={(e) => setFileEn(e.target.files?.[0] || null)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="file-he">Hebrew File (Required)</Label>
+                <Input
+                  id="file-he"
+                  type="file"
+                  accept=".docx,.pdf"
+                  onChange={(e) => setFileHe(e.target.files?.[0] || null)}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {status && (
           <div
-            className={`rounded p-2 text-center text-sm ${status.includes("Error") ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}
+            className={`rounded p-2 text-center text-sm ${
+              status.includes("Error") || status.includes("⚠️")
+                ? "bg-red-50 text-red-600"
+                : status.includes("✅")
+                ? "bg-green-50 text-green-700"
+                : "bg-blue-50 text-blue-600"
+            }`}
           >
             {status}
           </div>
@@ -138,7 +183,7 @@ export default function UploadBatchModal({
           </Button>
           <Button onClick={handleUpload} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {loading ? "Ingesting..." : "Start Ingestion"}
+            {loading ? "Importing..." : "Import Stories"}
           </Button>
         </div>
       </DialogContent>

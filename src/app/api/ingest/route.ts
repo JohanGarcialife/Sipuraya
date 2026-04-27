@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import mammoth from "mammoth";
 import pdf from "pdf-parse"; // Revert to default import matching zipper.js behavior
+import * as XLSX from "xlsx";
 
 // CONFIGURATION
 export const runtime = 'nodejs'; // Required for FormData handling
@@ -60,17 +61,19 @@ function formatEnglishDate(day: number, monthEnglish: string): string {
 
 function cleanId(id: string | null) {
   if (!id) return null;
-  // Handle case like "Ni0044" -> "Ni44" or "ly0074" -> "Iy74"
+  // Normalize both format (prefixCase) and value (zero-padding for sorting)
+  // e.g. "ly6" -> "Iy0006", "Ni123" -> "Ni0123"
   const match = id.match(/([A-Za-z]+)(\d+)/);
   if (!match) return id.trim().toUpperCase();
 
   let prefix = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
   
-  // Normalize common typos (English file often uses lowercase L 'ly' instead of capital I 'Iy')
+  // Normalize common typos
   if (prefix === 'Ly') prefix = 'Iy';
 
   const num = parseInt(match[2], 10);
-  return `${prefix}${num}`;
+  // We use 4-digit padding to supporting sorting up to 9999 stories per prefix
+  return `${prefix}${num.toString().padStart(4, '0')}`;
 }
 
 function smartFindId(line: string) {
@@ -590,6 +593,55 @@ async function generateEmbedding(text: string) {
   }
 }
 
+// --- PARSE XLSX FILE ---
+// Handles merged spreadsheet format with columns:
+// Story ID | Rabbi (English) | Rabbi (Hebrew) | Date (English) | Date (Hebrew) | Title (English) | Title (Hebrew) | Content (English) | Content (Hebrew)
+function parseXlsxToStoriesMap(buffer: Buffer): Map<string, any> {
+  const map = new Map<string, any>();
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows: any[] = XLSX.utils.sheet_to_json(ws);
+
+  console.log(`[Ingest XLSX] Parsed ${rows.length} rows from spreadsheet.`);
+
+  rows.forEach((row, i) => {
+    const rawId = row['Story ID'] || row['story_id'] || row['ID'] || null;
+    if (!rawId) {
+      console.warn(`[Ingest XLSX] Row ${i + 1} missing Story ID, skipping.`);
+      return;
+    }
+
+    const id = cleanId(String(rawId).trim());
+    if (!id) return;
+
+    const dateEnRaw = String(row['Date (English)'] || row['date_en'] || '').trim();
+    const dayMatch = dateEnRaw.match(/(\d+)/);
+    const day = dayMatch ? parseInt(dayMatch[1], 10) : 1;
+    const monthRaw = dateEnRaw.replace(/\d+\s*/g, '').trim();
+    const monthKey = monthRaw.toLowerCase();
+    const month = (MONTH_MAP[monthKey] ? monthRaw : monthRaw) || 'Iyar';
+
+    const story = {
+      story_id: id,
+      rabbi_en: String(row['Rabbi (English)'] || row['rabbi_en'] || '').trim() || null,
+      rabbi_he: String(row['Rabbi (Hebrew)'] || row['rabbi_he'] || '').trim() || null,
+      date_en: dateEnRaw || null,
+      date_he: String(row['Date (Hebrew)'] || row['date_he'] || '').trim() || null,
+      title_en: String(row['Title (English)'] || row['title_en'] || '').trim() || null,
+      title_he: String(row['Title (Hebrew)'] || row['title_he'] || '').trim() || null,
+      body_en: String(row['Content (English)'] || row['content_en'] || '').trim() || null,
+      body_he: String(row['Content (Hebrew)'] || row['content_he'] || '').trim() || null,
+      tags: [],
+      embedding: null,
+    };
+
+    map.set(id, story);
+    console.log(`[Ingest XLSX] Row ${i + 1}: ${id} - ${story.title_en?.substring(0, 40)}`);
+  });
+
+  return map;
+}
+
 export async function POST(req: NextRequest) {
   try {
   const supabase = createClient(
@@ -603,9 +655,52 @@ export async function POST(req: NextRequest) {
     
     const fileEn = formData.get("fileEn") as File | null;
     const fileHe = formData.get("fileHe") as File | null;
+    const fileXlsx = formData.get("fileXlsx") as File | null;
 
+    // === XLSX FAST PATH ===
+    // If an XLSX file is provided, bypass the DOCX parsers entirely
+    const isXlsxUpload = fileXlsx && (fileXlsx.name.toLowerCase().endsWith('.xlsx') || fileXlsx.name.toLowerCase().endsWith('.xls'));
+    if (isXlsxUpload) {
+      console.log(`[Ingest] 📊 XLSX fast path activated: ${fileXlsx.name}`);
+      const xlsxBuffer = Buffer.from(await fileXlsx.arrayBuffer());
+      const storiesMap = parseXlsxToStoriesMap(xlsxBuffer);
+
+      if (storiesMap.size === 0) {
+        return NextResponse.json({ error: 'No stories found in the spreadsheet. Check the column headers.' }, { status: 400 });
+      }
+
+      // Generate embeddings and upsert to Supabase
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      let upsertCount = 0;
+      for (const story of storiesMap.values()) {
+        const textForEmbedding = [story.title_en, story.title_he, story.body_en, story.body_he].filter(Boolean).join(' ');
+        story.embedding = await generateEmbedding(textForEmbedding);
+
+        const { error } = await supabase.from('stories').upsert(
+          { ...story },
+          { onConflict: 'story_id' }
+        );
+        if (error) {
+          console.error(`[Ingest XLSX] Upsert error for ${story.story_id}:`, error.message);
+        } else {
+          upsertCount++;
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `✅ Imported ${upsertCount} stories from spreadsheet.`,
+        count: upsertCount,
+      });
+    }
+
+    // === DOCX / PDF LEGACY PATH ===
     if (!fileHe) {
-        return NextResponse.json({ error: "Hebrew file is required" }, { status: 400 });
+        return NextResponse.json({ error: "Hebrew file (.docx/.pdf) or Spreadsheet (.xlsx) is required" }, { status: 400 });
     }
 
     console.log(`📥 Processing files: EN=${fileEn?.name || "(none)"}, HE=${fileHe.name}`);
