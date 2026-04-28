@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { applyGeresh } from "@/lib/hebrewUtils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import PremiumGateModal from "./PremiumGateModal";
 
 type StoryReaderProps = {
@@ -16,6 +17,7 @@ type StoryReaderProps = {
   body: string | null;
   date?: string;
   initialLikes?: number;
+  imageUrl?: string | null;
 };
 
 function parseDateHe(dateHe: string): { dayHe: string; monthHe: string } {
@@ -44,6 +46,7 @@ export default function StoryReader({
   body,
   date,
   initialLikes = 0,
+  imageUrl,
 }: StoryReaderProps) {
   const router = useRouter();
   const { isHe, t } = useLanguage();
@@ -153,6 +156,19 @@ export default function StoryReader({
         <p className="mb-6 text-center text-sm font-medium text-[var(--reader-text-muted)]">
           {date}
         </p>
+      )}
+
+      {/* Story Image */}
+      {imageUrl && (
+        <div className="relative mb-8 aspect-video w-full overflow-hidden rounded-xl shadow-md border border-[var(--reader-border)]">
+          <Image
+            src={imageUrl}
+            alt={title || "Story Image"}
+            fill
+            className="object-cover"
+            priority
+          />
+        </div>
       )}
 
       {/* Title — Frank Ruhl Libre */}

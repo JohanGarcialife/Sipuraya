@@ -18,6 +18,7 @@ type Story = {
   date_he?: string;
   date_en?: string;
   likes_count: number;
+  image_url?: string | null;
 };
 
 type HebrewDate = {
@@ -121,6 +122,7 @@ export default function StoryPage() {
             body={isHe ? story.body_he : story.body_en}
             date={isHe ? story.date_he : story.date_en}
             initialLikes={story.likes_count}
+            imageUrl={story.image_url}
           />
         )}
       </main>

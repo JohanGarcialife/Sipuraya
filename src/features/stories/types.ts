@@ -1,4 +1,4 @@
-// Matching the NEW Supabase Schema with 10 columns
+// Matching the NEW Supabase Schema with 11 columns
 export type Story = {
   story_id: string;            // External ID (Ad0001, Ad0002, etc.) - PRIMARY KEY
   rabbi_he: string | null;     // Rabbi name in Hebrew
@@ -10,6 +10,7 @@ export type Story = {
   body_he: string | null;      // Hebrew story content
   body_en: string | null;      // English story content
   tags: string[];              // Tags array
+  image_url?: string | null;   // Optional story image URL
   embedding?: number[] | null; // AI embedding (optional)
   is_published?: boolean;      // Publishing status
   created_at?: string;         // Timestamp

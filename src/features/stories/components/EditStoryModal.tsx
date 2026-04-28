@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Story } from "../types";
 import { toast } from "sonner";
+import { ImageIcon, Loader2, X } from "lucide-react";
+import Image from "next/image";
 
 interface EditStoryModalProps {
   story: Story | null;
@@ -31,6 +33,7 @@ export default function EditStoryModal({
 }: EditStoryModalProps) {
   const supabase = createSupabaseBrowserClient();
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [formData, setFormData] = useState({
     rabbi_he: story?.rabbi_he || "",
     rabbi_en: story?.rabbi_en || "",
@@ -41,11 +44,12 @@ export default function EditStoryModal({
     body_en: story?.body_en || "",
     body_he: story?.body_he || "",
     tags: story?.tags || [],
+    image_url: story?.image_url || "",
   });
 
   // When the story prop changes, update the form data
   useEffect(() => {
-    if (story && (formData.title_en !== story.title_en || formData.title_he !== story.title_he)) {
+    if (story) {
       setFormData({
         rabbi_he: story.rabbi_he || "",
         rabbi_en: story.rabbi_en || "",
@@ -56,12 +60,46 @@ export default function EditStoryModal({
         body_en: story.body_en || "",
         body_he: story.body_he || "",
         tags: story.tags || [],
+        image_url: story.image_url || "",
       });
     }
-  }, [story?.story_id]);
+  }, [story?.story_id]); // Depend only on story_id to prevent overwrite while typing
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !story) return;
+
+    setUploadingImage(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${story.story_id}_${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    try {
+      // 1. Upload the image
+      const { error: uploadError } = await supabase.storage
+        .from('story_images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('story_images')
+        .getPublicUrl(filePath);
+
+      // 3. Update local state (it will be saved to DB when user clicks Save)
+      handleChange('image_url', publicUrl);
+      toast.success("Image uploaded successfully! Don't forget to click Save.");
+
+    } catch (err: any) {
+      toast.error("Failed to upload image", { description: err.message });
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleSave = async () => {
@@ -80,6 +118,7 @@ export default function EditStoryModal({
         body_en: formData.body_en,
         body_he: formData.body_he,
         tags: formData.tags,
+        image_url: formData.image_url,
       })
       .eq("story_id", story.story_id);
 
@@ -106,6 +145,61 @@ export default function EditStoryModal({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Image Section */}
+          <div className="border-b pb-4">
+            <h3 className="mb-3 font-bold text-lg">Featured Image</h3>
+            <div className="flex items-start gap-6">
+              <div className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-gray-300 bg-gray-50">
+                {formData.image_url ? (
+                  <>
+                    <Image
+                      src={formData.image_url}
+                      alt="Story Image"
+                      fill
+                      className="object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleChange('image_url', '')}
+                      className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white opacity-80 hover:bg-red-600 hover:opacity-100"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <ImageIcon className="h-8 w-8 text-gray-400" />
+                )}
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="image-upload" className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2">
+                  {uploadingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                  {uploadingImage ? "Uploading..." : "Upload New Image"}
+                </Label>
+                <Input
+                  id="image-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                />
+                <p className="text-xs text-gray-500">
+                  Supported formats: JPG, PNG, WebP. Recommended ratio: 16:9. <br/>
+                  Images generated by AI tools (like ChatGPT) look best here.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Label className="text-xs">Or paste URL:</Label>
+                  <Input 
+                    placeholder="https://..." 
+                    value={formData.image_url} 
+                    onChange={(e) => handleChange('image_url', e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Metadata Section - Full Width */}
           <div className="border-b pb-4">
             <h3 className="mb-3 font-bold text-lg">Metadata</h3>
