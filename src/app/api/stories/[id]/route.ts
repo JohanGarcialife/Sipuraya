@@ -23,7 +23,7 @@ export async function GET(
     const { data: story, error } = await supabase
       .from("stories")
       .select(
-        "story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags, likes_count"
+        "story_id, rabbi_he, rabbi_en, date_he, date_en, title_he, title_en, body_he, body_en, tags, likes_count, image_url"
       )
       .eq("story_id", id)
       .single();
