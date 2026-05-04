@@ -87,7 +87,15 @@ function SearchContent() {
           body: JSON.stringify({ query: q }),
         });
 
-        if (!res.ok) throw new Error("Search failed");
+        if (!res.ok) {
+          throw new Error(isHe ? "חיפוש נכשל. אנא נסה שוב." : "Search failed. Please try again.");
+        }
+        
+        // Ensure the response is JSON before parsing to prevent 'Unexpected token <' errors
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+           throw new Error(isHe ? "השרת לקח זמן רב מדי להגיב. אנא רענן את העמוד ונסה שוב." : "The server took too long to respond. Please refresh and try again.");
+        }
         
         const data = await res.json();
         setAiAnswer(data.answer);

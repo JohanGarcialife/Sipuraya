@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 
 // Configure runtime for Edge functionality if compatible, or Node.js for broad compatibility
-export const runtime = 'nodejs'; 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
