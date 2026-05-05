@@ -15,8 +15,138 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Story } from "../types";
 import { toast } from "sonner";
-import { ImageIcon, Loader2, X } from "lucide-react";
+import { ImageIcon, Loader2, Star, X } from "lucide-react";
 import Image from "next/image";
+
+// ── Hebrew month options (Sipuraya DB convention) ──
+const HEBREW_MONTHS = [
+  "Nissan", "Iyar", "Sivan", "Tamuz", "Av", "Elul",
+  "Tishrei", "Cheshvan", "Kislev", "Tevet", "Shevat",
+  "Adar", "Adar I", "Adar II",
+];
+
+// ── Featured Story Tag UI (inlined sub-component) ──
+function FeaturedTagSection({
+  formData,
+  setFormData,
+}: {
+  formData: { tags: string[]; [key: string]: any };
+  setFormData: React.Dispatch<React.SetStateAction<any>>;
+}) {
+  // Find the first featured-{day}-{month} tag in the current tags
+  const existingTag = formData.tags.find((t) => t.startsWith("featured-"));
+  const [day, setDay] = useState<string>("");
+  const [month, setMonth] = useState<string>(HEBREW_MONTHS[0]);
+  const [active, setActive] = useState(!!existingTag);
+
+  // Parse existing tag on mount / tag change
+  useEffect(() => {
+    if (existingTag) {
+      const [, d, m] = existingTag.split("-");
+      if (d) setDay(d);
+      if (m) setMonth(m);
+      setActive(true);
+    } else {
+      setActive(false);
+    }
+  }, [existingTag]);
+
+  const applyTag = () => {
+    if (!day || isNaN(Number(day)) || Number(day) < 1 || Number(day) > 30) return;
+    const tag = `featured-${day}-${month}`;
+    // Remove any previous featured tag then add new one
+    const cleaned = formData.tags.filter((t) => !t.startsWith("featured-"));
+    setFormData((prev: any) => ({ ...prev, tags: [...cleaned, tag] }));
+    setActive(true);
+  };
+
+  const removeTag = () => {
+    const cleaned = formData.tags.filter((t) => !t.startsWith("featured-"));
+    setFormData((prev: any) => ({ ...prev, tags: cleaned }));
+    setActive(false);
+    setDay("");
+  };
+
+  return (
+    <div
+      className={`rounded-xl border-2 p-4 transition-colors ${
+        active
+          ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30"
+          : "border-dashed border-gray-200 dark:border-gray-700"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Star
+          className={`h-4 w-4 ${
+            active ? "fill-amber-500 text-amber-500" : "text-gray-400"
+          }`}
+        />
+        <span className="font-semibold text-sm">
+          {active ? (
+            <>
+              Featured Story of the Day
+              <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white font-bold">
+                {existingTag?.replace("featured-", "")}
+              </span>
+            </>
+          ) : (
+            "Schedule as Featured Story of the Day"
+          )}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        This story will appear in the premium hero card on the homepage on the specified Hebrew date.
+        Tag format: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">featured-7-Sivan</code>
+      </p>
+      <div className="flex gap-2 items-end flex-wrap">
+        <div className="space-y-1">
+          <Label className="text-xs">Day (1–30)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={30}
+            className="w-20 h-8 text-sm"
+            placeholder="7"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Hebrew Month</Label>
+          <select
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {HEBREW_MONTHS.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="bg-amber-500 hover:bg-amber-600 text-white h-8"
+          onClick={applyTag}
+        >
+          <Star className="mr-1 h-3 w-3" />
+          {active ? "Update Date" : "Set as Featured"}
+        </Button>
+        {active && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-red-600 border-red-300 hover:bg-red-50"
+            onClick={removeTag}
+          >
+            <X className="mr-1 h-3 w-3" /> Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface EditStoryModalProps {
   story: Story | null;
@@ -291,7 +421,8 @@ export default function EditStoryModal({
           <div className="space-y-4 border-t pt-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">Promotion & Tags</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
+                {/* Holiday */}
                 <Button
                   type="button"
                   variant={formData.tags.includes("holiday") ? "default" : "outline"}
@@ -306,6 +437,7 @@ export default function EditStoryModal({
                 >
                   🕍 Holiday Section
                 </Button>
+                {/* New */}
                 <Button
                   type="button"
                   variant={formData.tags.includes("new") ? "default" : "outline"}
@@ -322,6 +454,9 @@ export default function EditStoryModal({
                 </Button>
               </div>
             </div>
+
+            {/* ── Featured Story of the Day ── */}
+            <FeaturedTagSection formData={formData} setFormData={setFormData} />
 
             <div className="space-y-2">
               <Label className="text-xs text-gray-500 uppercase tracking-wider">Internal Tags (Comma Separated)</Label>

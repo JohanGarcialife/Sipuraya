@@ -5,6 +5,7 @@ import ReaderNav from "@/features/reader/components/ReaderNav";
 import StoryRibbon from "@/features/reader/components/StoryRibbon";
 import PosterCard from "@/features/reader/components/PosterCard";
 import HeroSection from "@/features/reader/components/HeroSection";
+import FeaturedStoryCard from "@/features/reader/components/FeaturedStoryCard";
 import { useLanguage } from "@/features/reader/context/LanguageContext";
 
 type HebrewDate = {
@@ -102,6 +103,9 @@ export default function ReadPage() {
       <HeroSection totalStories={data?.totalForToday} />
 
       <main id="daily-stories" className="mx-auto max-w-[800px] px-6 pb-16 pt-8 md:px-4 md:py-6 sm:px-3 sm:pb-10">
+
+        {/* ═══ FEATURED STORY OF THE DAY ═══ */}
+        <FeaturedStoryCard />
 
         {/* ═══ DATE NAVIGATION ═══ */}
         <nav
