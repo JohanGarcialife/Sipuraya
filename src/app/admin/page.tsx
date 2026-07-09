@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown, Users, Trash2 } from "lucide-react";
+import { Pencil, LogOut, ChevronLeft, ChevronRight, Search, Plus, Loader2, ArrowUpDown, Users, Trash2, Download } from "lucide-react";
 import EditStoryModal from "../../features/stories/components/EditStoryModal";
 import UploadBatchModal from "../../features/batch-upload/components/UploadBatchModal";
 import BulkEditRabbiModal from "../../features/stories/components/BulkEditRabbiModal"; 
@@ -43,6 +43,7 @@ export default function AdminDashboard() {
   const supabase = createSupabaseBrowserClient();
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Pagination, Search, Sort
   const [page, setPage] = useState(1);
@@ -93,6 +94,10 @@ export default function AdminDashboard() {
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
         
+        // Helper to strip Hebrew Nikud (vocalization marks)
+        const stripNikud = (text: string) => text.replace(/[\u0591-\u05C7]/g, '');
+        const cleanTerm = stripNikud(term);
+        
         // 1. EXACT ID MATCH: If pattern is AdXXXX or Ad1-XXXX, search ONLY story_id
         const idPattern = /^Ad\d+-?\d*$/i;
         if (idPattern.test(term)) {
@@ -108,12 +113,13 @@ export default function AdminDashboard() {
           // For AND logic with Supabase, we need to chain .or() calls
           // Each word must appear in at least one column
           words.forEach(word => {
-            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
+            const cleanWord = stripNikud(word);
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
           });
         }
         // 3. SINGLE WORD OR EXACT PHRASE: Search across all columns (OR logic)
         else {
-          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
+          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
         }
       }
 
@@ -143,6 +149,87 @@ export default function AdminDashboard() {
   const handleSearch = () => {
     setPage(1); // Reset to page 1 when searching
     fetchStories();
+  };
+
+  // EXPORT TO CSV
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    try {
+      // Helper to strip Hebrew Nikud
+      const stripNikud = (text: string) => text.replace(/[\u0591-\u05C7]/g, '');
+
+      // Build query with same filters but NO pagination
+      let query = supabase
+        .from('stories')
+        .select('story_id, date_en, date_he, rabbi_en, rabbi_he, title_en, title_he, body_en, body_he');
+
+      if (monthFilter) {
+        query = query.ilike('date_en', `%${monthFilter}%`);
+      }
+
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim();
+        const cleanTerm = stripNikud(term);
+        const idPattern = /^Ad\d+-?\d*$/i;
+        if (idPattern.test(term)) {
+          const normalizedId = term.charAt(0).toUpperCase() + term.charAt(1).toLowerCase() + term.slice(2);
+          query = query.eq('story_id', normalizedId);
+        } else if (term.includes(' ') && !exactMatch) {
+          const words = term.split(/\s+/).filter(w => w.length > 0);
+          words.forEach(word => {
+            const cleanWord = stripNikud(word);
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
+          });
+        } else {
+          query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+        }
+      }
+
+      query = query.order(sortCol, { ascending: sortAsc });
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        alert('No results to export.');
+        return;
+      }
+
+      // Build CSV with UTF-8 BOM for Hebrew support in Excel
+      const headers = ['ID', 'Date (EN)', 'Date (HE)', 'Rabbi (EN)', 'Rabbi (HE)', 'Title (EN)', 'Title (HE)', 'Body (EN)', 'Body (HE)'];
+      const escapeCell = (val: any) => {
+        if (val == null) return '';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      };
+
+      const rows = data.map(s => [
+        escapeCell(s.story_id),
+        escapeCell(s.date_en),
+        escapeCell(s.date_he),
+        escapeCell(s.rabbi_en),
+        escapeCell(s.rabbi_he),
+        escapeCell(s.title_en),
+        escapeCell(s.title_he),
+        escapeCell(s.body_en),
+        escapeCell(s.body_he),
+      ].join(','));
+
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const filename = `sipuraya_${searchTerm || monthFilter || 'all'}_${new Date().toISOString().slice(0,10)}.csv`;
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(`Export failed: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSort = (col: string) => {
@@ -243,6 +330,17 @@ export default function AdminDashboard() {
           </div>
           <Button variant="secondary" onClick={handleSearch}>
               <Search className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportCSV}
+            disabled={isExporting}
+            className="border-green-200 text-green-700 hover:bg-green-50 whitespace-nowrap"
+          >
+            {isExporting
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Exporting...</>
+              : <><Download className="mr-2 h-4 w-4" /> Export CSV</>
+            }
           </Button>
       </div>
 

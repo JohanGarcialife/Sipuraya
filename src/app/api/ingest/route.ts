@@ -24,7 +24,7 @@ const MONTH_MAP: Record<string, number> = {
 // Hebrew month names for date formatting
 const HEBREW_MONTH_NAMES: Record<string, string> = {
   'Nisan': 'ניסן', 'Nissan': 'ניסן', 'Iyar': 'אייר', 'Sivan': 'סיון',
-  'Tamuz': 'תמוז', 'Tammuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
+  'Tamuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
   'Tishrei': 'תשרי', 'Cheshvan': 'חשון', 'Kislev': 'כסלו',
   'Tevet': 'טבת', 'Shevat': 'שבט', 'Adar': 'אדר',
   'Adar I': 'אדר א', 'Adar II': 'אדר ב'
@@ -545,7 +545,7 @@ function parseHebrewStory(story: any) {
       const dayNum = parseInt(idMatch[2], 10);
       const monthMap: {[key: string]: string} = {
         'Ad': 'Adar', 'Ni': 'Nissan', 'Iy': 'Iyar', 'Si': 'Sivan',
-        'Ta': 'Tammuz', 'Av': 'Av', 'El': 'Elul', 'Ti': 'Tishrei',
+        'Ta': 'Tamuz', 'Av': 'Av', 'El': 'Elul', 'Ti': 'Tishrei',
         'Ch': 'Cheshvan', 'Ki': 'Kislev', 'Te': 'Tevet', 'Sh': 'Shevat'
       };
       // Month from ID prefix is more reliable
