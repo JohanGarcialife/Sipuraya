@@ -594,8 +594,8 @@ async function generateEmbedding(text: string) {
 }
 
 // --- PARSE XLSX FILE ---
-// Handles merged spreadsheet format with columns:
-// Story ID | Rabbi (English) | Rabbi (Hebrew) | Date (English) | Date (Hebrew) | Title (English) | Title (Hebrew) | Content (English) | Content (Hebrew)
+// Handles merged spreadsheet format with flexible columns:
+// Story ID | Rabbi (English) | Rabbi (Hebrew) | Date (English) | Date (Hebrew) | Title (English) | Title (Hebrew) | Content/Story Text (English) | Content/Story Text (Hebrew)
 function parseXlsxToStoriesMap(buffer: Buffer): Map<string, any> {
   const map = new Map<string, any>();
   const wb = XLSX.read(buffer, { type: 'buffer' });
@@ -605,7 +605,7 @@ function parseXlsxToStoriesMap(buffer: Buffer): Map<string, any> {
   console.log(`[Ingest XLSX] Parsed ${rows.length} rows from spreadsheet.`);
 
   rows.forEach((row, i) => {
-    const rawId = row['Story ID'] || row['story_id'] || row['ID'] || null;
+    const rawId = row['Story ID'] || row['story_id'] || row['ID'] || row['Id'] || row['id'] || null;
     if (!rawId) {
       console.warn(`[Ingest XLSX] Row ${i + 1} missing Story ID, skipping.`);
       return;
@@ -614,29 +614,30 @@ function parseXlsxToStoriesMap(buffer: Buffer): Map<string, any> {
     const id = cleanId(String(rawId).trim());
     if (!id) return;
 
-    const dateEnRaw = String(row['Date (English)'] || row['date_en'] || '').trim();
-    const dayMatch = dateEnRaw.match(/(\d+)/);
-    const day = dayMatch ? parseInt(dayMatch[1], 10) : 1;
-    const monthRaw = dateEnRaw.replace(/\d+\s*/g, '').trim();
-    const monthKey = monthRaw.toLowerCase();
-    const month = (MONTH_MAP[monthKey] ? monthRaw : monthRaw) || 'Iyar';
+    const dateEnRaw = String(row['Date (English)'] || row['date_en'] || row['Date (EN)'] || row['English Date'] || '').trim();
+    const dateHeRaw = String(row['Hebrew Date'] || row['Date (Hebrew)'] || row['date_he'] || row['Date (HE)'] || row['Hebrew Date'] || '').trim();
+    const rabbiEnRaw = String(row['Rabbi (English)'] || row['rabbi_en'] || row['Rabbi (EN)'] || row['English Rabbi'] || '').trim();
+    const rabbiHeRaw = String(row['Rabbi (Hebrew)'] || row['rabbi_he'] || row['Rabbi (HE)'] || row['Hebrew Rabbi'] || '').trim();
+    const titleEnRaw = String(row['Title (English)'] || row['title_en'] || row['Title (EN)'] || row['English Title'] || '').trim();
+    const titleHeRaw = String(row['Title (Hebrew)'] || row['title_he'] || row['Title (HE)'] || row['Hebrew Title'] || '').trim();
+    const bodyEnRaw = String(row['Story Text (English)'] || row['Content (English)'] || row['content_en'] || row['body_en'] || row['Body (EN)'] || row['English Text'] || '').trim();
+    const bodyHeRaw = String(row['Story Text (Hebrew)'] || row['Content (Hebrew)'] || row['content_he'] || row['body_he'] || row['Body (HE)'] || row['Hebrew Text'] || '').trim();
 
     const story = {
       story_id: id,
-      rabbi_en: String(row['Rabbi (English)'] || row['rabbi_en'] || '').trim() || null,
-      rabbi_he: String(row['Rabbi (Hebrew)'] || row['rabbi_he'] || '').trim() || null,
+      rabbi_en: rabbiEnRaw || null,
+      rabbi_he: rabbiHeRaw || null,
       date_en: dateEnRaw || null,
-      date_he: String(row['Date (Hebrew)'] || row['date_he'] || '').trim() || null,
-      title_en: String(row['Title (English)'] || row['title_en'] || '').trim() || null,
-      title_he: String(row['Title (Hebrew)'] || row['title_he'] || '').trim() || null,
-      body_en: String(row['Content (English)'] || row['content_en'] || '').trim() || null,
-      body_he: String(row['Content (Hebrew)'] || row['content_he'] || '').trim() || null,
+      date_he: dateHeRaw || null,
+      title_en: titleEnRaw || null,
+      title_he: titleHeRaw || null,
+      body_en: bodyEnRaw || null,
+      body_he: bodyHeRaw || null,
       tags: [],
-      embedding: null,
+      is_published: true,
     };
 
     map.set(id, story);
-    console.log(`[Ingest XLSX] Row ${i + 1}: ${id} - ${story.title_en?.substring(0, 40)}`);
   });
 
   return map;
@@ -669,25 +670,43 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No stories found in the spreadsheet. Check the column headers.' }, { status: 400 });
       }
 
-      // Generate embeddings and upsert to Supabase
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
-      );
-
+      const storiesList = Array.from(storiesMap.values());
+      const BATCH_SIZE = 50;
       let upsertCount = 0;
-      for (const story of storiesMap.values()) {
-        const textForEmbedding = [story.title_en, story.title_he, story.body_en, story.body_he].filter(Boolean).join(' ');
-        story.embedding = await generateEmbedding(textForEmbedding);
+
+      for (let i = 0; i < storiesList.length; i += BATCH_SIZE) {
+        const batch = storiesList.slice(i, i + BATCH_SIZE);
+
+        // Try batch embeddings
+        try {
+          const textsForEmbedding = batch.map(s => {
+            const combined = [s.title_en, s.title_he, s.body_en, s.body_he].filter(Boolean).join(' ');
+            const clean = combined.replace(/\s+/g, ' ').slice(0, 4000);
+            return clean.length >= 5 ? clean : 'Jewish story';
+          });
+
+          const embeddingRes = await openai.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: textsForEmbedding,
+            dimensions: 1536,
+          });
+
+          embeddingRes.data.forEach((item, idx) => {
+            batch[idx].embedding = item.embedding;
+          });
+        } catch (e: any) {
+          console.warn(`[Ingest XLSX] Batch embedding skipped: ${e.message}`);
+        }
 
         const { error } = await supabase.from('stories').upsert(
-          { ...story },
+          batch,
           { onConflict: 'story_id' }
         );
+
         if (error) {
-          console.error(`[Ingest XLSX] Upsert error for ${story.story_id}:`, error.message);
+          console.error(`[Ingest XLSX] Batch upsert error at index ${i}:`, error.message);
         } else {
-          upsertCount++;
+          upsertCount += batch.length;
         }
       }
 
