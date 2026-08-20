@@ -64,8 +64,10 @@ export async function POST(req: NextRequest) {
         orClauses.push(`rabbi_en.ilike.%${variant}%`);
         orClauses.push(`body_he_clean.ilike.%${variant}%`);
         orClauses.push(`body_en.ilike.%${variant}%`);
-        orClauses.push(`tags_clean.ilike.%${variant}%`);
         orClauses.push(`tags.cs.{"${variant}"}`);
+        orClauses.push(`tags.cs.{"${variant} איגר"}`);
+        orClauses.push(`tags.cs.{"${variant} אייגר"}`);
+        orClauses.push(`tags.cs.{"רבי ${variant}"}`);
       });
 
       dbQuery = dbQuery.or(orClauses.join(','));
