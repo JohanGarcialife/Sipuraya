@@ -4,6 +4,7 @@
 -- 1. Add normal columns to store clean Hebrew text (without Nikud/diacritics)
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS body_he_clean TEXT;
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS title_he_clean TEXT;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS tags_clean TEXT;
 
 -- 2. Create utility function to strip Hebrew Nikud (Unicode range U+0591 to U+05C7)
 CREATE OR REPLACE FUNCTION strip_nikud(text_val TEXT)
@@ -22,6 +23,11 @@ RETURNS TRIGGER AS $$
 BEGIN
   NEW.body_he_clean := strip_nikud(NEW.body_he);
   NEW.title_he_clean := strip_nikud(NEW.title_he);
+  IF NEW.tags IS NOT NULL THEN
+    NEW.tags_clean := strip_nikud(array_to_string(NEW.tags, ' '));
+  ELSE
+    NEW.tags_clean := NULL;
+  END IF;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -62,7 +68,8 @@ $$ LANGUAGE plpgsql;
 -- 6. Populate clean columns for all existing stories directly
 UPDATE stories SET
   body_he_clean = strip_nikud(body_he),
-  title_he_clean = strip_nikud(title_he);
+  title_he_clean = strip_nikud(title_he),
+  tags_clean = CASE WHEN tags IS NOT NULL THEN strip_nikud(array_to_string(tags, ' ')) ELSE NULL END;
 
 -- Verification Query: check if columns are populated
 SELECT story_id, title_he, title_he_clean, SUBSTRING(body_he, 1, 50) as body_raw, SUBSTRING(body_he_clean, 1, 50) as body_clean

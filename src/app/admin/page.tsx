@@ -114,7 +114,7 @@ export default function AdminDashboard() {
           // Each word must appear in at least one column
           words.forEach(word => {
             const cleanWord = stripNikud(word);
-            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,tags_clean.ilike.%${cleanWord}%,tags.cs.{"${word}"},story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%,date_en.ilike.%${word}%,date_he.ilike.%${word}%`);
           });
         }
         // 3. SINGLE WORD OR EXACT PHRASE: Search across all columns (OR logic)
@@ -125,16 +125,17 @@ export default function AdminDashboard() {
             const wb = (col: string, t: string) =>
               `${col}.ilike.${t} %,${col}.ilike.% ${t} %,${col}.ilike.% ${t},${col}.eq.${t}`;
             const cols = ['title_en', 'body_en', 'rabbi_en', 'rabbi_he', 'date_en'];
-            const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he'];
+            const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he', 'tags_clean'];
             const orParts = [
               ...cols.map(c => wb(c, term)),
               ...colsClean.map(c => wb(c, cleanTerm)),
+              `tags.cs.{"${term}"}`,
               `story_id.eq.${term}`,
             ].join(',');
             query = query.or(orParts);
           } else {
             // SUBSTRING MODE (default): match anywhere in the text
-            query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
+            query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,tags_clean.ilike.%${cleanTerm}%,tags.cs.{"${term}"},story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%,date_en.ilike.%${term}%,date_he.ilike.%${term}%`);
           }
         }
       }
@@ -194,22 +195,23 @@ export default function AdminDashboard() {
           const words = term.split(/\s+/).filter(w => w.length > 0);
           words.forEach(word => {
             const cleanWord = stripNikud(word);
-            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
+            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,tags_clean.ilike.%${cleanWord}%,tags.cs.{"${word}"},story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
           });
         } else {
           if (exactMatch && !term.includes(' ')) {
             const wb = (col: string, t: string) =>
               `${col}.ilike.${t} %,${col}.ilike.% ${t} %,${col}.ilike.% ${t},${col}.eq.${t}`;
             const cols = ['title_en', 'body_en', 'rabbi_en', 'rabbi_he', 'date_en'];
-            const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he'];
+            const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he', 'tags_clean'];
             const orParts = [
               ...cols.map(c => wb(c, term)),
               ...colsClean.map(c => wb(c, cleanTerm)),
+              `tags.cs.{"${term}"}`,
               `story_id.eq.${term}`,
             ].join(',');
             query = query.or(orParts);
           } else {
-            query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+            query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,tags_clean.ilike.%${cleanTerm}%,tags.cs.{"${term}"},story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
           }
         }
       }

@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
         orClauses.push(`rabbi_en.ilike.%${variant}%`);
         orClauses.push(`body_he_clean.ilike.%${variant}%`);
         orClauses.push(`body_en.ilike.%${variant}%`);
+        orClauses.push(`tags_clean.ilike.%${variant}%`);
+        orClauses.push(`tags.cs.{"${variant}"}`);
       });
 
       dbQuery = dbQuery.or(orClauses.join(','));
