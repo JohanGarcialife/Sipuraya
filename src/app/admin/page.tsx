@@ -176,53 +176,71 @@ export default function AdminDashboard() {
       // Helper to strip Hebrew Nikud
       const stripNikud = (text: string) => text.replace(/[\u0591-\u05C7]/g, '');
 
-      // Build query with same filters but NO pagination
-      let query = supabase
-        .from('stories')
-        .select('story_id, date_en, date_he, rabbi_en, rabbi_he, title_en, title_he, body_en, body_he');
+      // Fetch all matching stories in pages of 1,000 to bypass Supabase default limit
+      let allStories: any[] = [];
+      let from = 0;
+      const CHUNK_SIZE = 1000;
+      let hasMore = true;
 
-      if (monthFilter) {
-        query = query.ilike('date_en', `%${monthFilter}%`);
-      }
+      while (hasMore) {
+        let chunkQuery = supabase
+          .from('stories')
+          .select('story_id, date_en, date_he, rabbi_en, rabbi_he, title_en, title_he, body_en, body_he');
 
-      if (searchTerm.trim()) {
-        const term = searchTerm.trim();
-        const cleanTerm = stripNikud(term);
-        const idPattern = /^Ad\d+-?\d*$/i;
-        if (idPattern.test(term)) {
-          const normalizedId = term.charAt(0).toUpperCase() + term.charAt(1).toLowerCase() + term.slice(2);
-          query = query.eq('story_id', normalizedId);
-        } else if (term.includes(' ') && !exactMatch) {
-          const words = term.split(/\s+/).filter(w => w.length > 0);
-          words.forEach(word => {
-            const cleanWord = stripNikud(word);
-            query = query.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,tags.cs.{"${word}"},tags.cs.{"${cleanWord}"},story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
-          });
-        } else {
-          if (exactMatch && !term.includes(' ')) {
-            const wb = (col: string, t: string) =>
-              `${col}.ilike.${t} %,${col}.ilike.% ${t} %,${col}.ilike.% ${t},${col}.eq.${t}`;
-            const cols = ['title_en', 'body_en', 'rabbi_en', 'rabbi_he', 'date_en'];
-            const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he'];
-            const orParts = [
-              ...cols.map(c => wb(c, term)),
-              ...colsClean.map(c => wb(c, cleanTerm)),
-              `tags.cs.{"${term}"}`,
-              `tags.cs.{"${cleanTerm}"}`,
-              `story_id.eq.${term}`,
-            ].join(',');
-            query = query.or(orParts);
+        if (monthFilter) {
+          chunkQuery = chunkQuery.ilike('date_en', `%${monthFilter}%`);
+        }
+
+        if (searchTerm.trim()) {
+          const term = searchTerm.trim();
+          const cleanTerm = stripNikud(term);
+          const idPattern = /^Ad\d+-?\d*$/i;
+          if (idPattern.test(term)) {
+            const normalizedId = term.charAt(0).toUpperCase() + term.charAt(1).toLowerCase() + term.slice(2);
+            chunkQuery = chunkQuery.eq('story_id', normalizedId);
+          } else if (term.includes(' ') && !exactMatch) {
+            const words = term.split(/\s+/).filter(w => w.length > 0);
+            words.forEach(word => {
+              const cleanWord = stripNikud(word);
+              chunkQuery = chunkQuery.or(`title_en.ilike.%${word}%,title_he.ilike.%${word}%,title_he_clean.ilike.%${cleanWord}%,body_en.ilike.%${word}%,body_he.ilike.%${word}%,body_he_clean.ilike.%${cleanWord}%,tags.cs.{"${word}"},tags.cs.{"${cleanWord}"},story_id.ilike.%${word}%,rabbi_en.ilike.%${word}%,rabbi_he.ilike.%${word}%`);
+            });
           } else {
-            query = query.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,tags.cs.{"${term}"},tags.cs.{"${cleanTerm}"},story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+            if (exactMatch && !term.includes(' ')) {
+              const wb = (col: string, t: string) =>
+                `${col}.ilike.${t} %,${col}.ilike.% ${t} %,${col}.ilike.% ${t},${col}.eq.${t}`;
+              const cols = ['title_en', 'body_en', 'rabbi_en', 'rabbi_he', 'date_en'];
+              const colsClean = ['title_he_clean', 'body_he_clean', 'title_he', 'body_he'];
+              const orParts = [
+                ...cols.map(c => wb(c, term)),
+                ...colsClean.map(c => wb(c, cleanTerm)),
+                `tags.cs.{"${term}"}`,
+                `tags.cs.{"${cleanTerm}"}`,
+                `story_id.eq.${term}`,
+              ].join(',');
+              chunkQuery = chunkQuery.or(orParts);
+            } else {
+              chunkQuery = chunkQuery.or(`title_en.ilike.%${term}%,title_he.ilike.%${term}%,title_he_clean.ilike.%${cleanTerm}%,body_en.ilike.%${term}%,body_he.ilike.%${term}%,body_he_clean.ilike.%${cleanTerm}%,tags.cs.{"${term}"},tags.cs.{"${cleanTerm}"},story_id.ilike.%${term}%,rabbi_en.ilike.%${term}%,rabbi_he.ilike.%${term}%`);
+            }
+          }
+        }
+
+        chunkQuery = chunkQuery.order(sortCol, { ascending: sortAsc });
+        const { data: chunk, error } = await chunkQuery.range(from, from + CHUNK_SIZE - 1);
+
+        if (error) throw error;
+        if (!chunk || chunk.length === 0) {
+          hasMore = false;
+        } else {
+          allStories = allStories.concat(chunk);
+          if (chunk.length < CHUNK_SIZE) {
+            hasMore = false;
+          } else {
+            from += CHUNK_SIZE;
           }
         }
       }
 
-      query = query.order(sortCol, { ascending: sortAsc });
-
-      const { data, error } = await query;
-      if (error) throw error;
-      if (!data || data.length === 0) {
+      if (allStories.length === 0) {
         alert('No results to export.');
         return;
       }
@@ -235,7 +253,7 @@ export default function AdminDashboard() {
         return `"${str}"`;
       };
 
-      const rows = data.map(s => [
+      const rows = allStories.map(s => [
         escapeCell(s.story_id),
         escapeCell(s.date_en),
         escapeCell(s.date_he),
